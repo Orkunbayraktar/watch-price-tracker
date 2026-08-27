@@ -1,6 +1,26 @@
 {% extends "base.html" %}
 
+{% block title %}Watch Price Tracker{% endblock %}
+
 {% block content %}
-<h1>Watch Price Tracker</h1>
-<p>Ana sayfa şablonu.</p>
+<main class="page-shell">
+	<header class="topbar">
+		<div>
+			<p class="eyebrow">Watch Price Tracker</p>
+			<h1>Watch Price Tracker</h1>
+			<p class="subtitle">Trendyol and Hepsiburada watch price monitoring dashboard.</p>
+		</div>
+
+		<nav class="nav" aria-label="Primary navigation">
+			<a class="nav-link is-active" href="{{ url_for('main.index') }}">Dashboard</a>
+			<span class="nav-link is-placeholder" aria-disabled="true">Products</span>
+			<span class="nav-link is-placeholder" aria-disabled="true">Sellers</span>
+		</nav>
+	</header>
+
+	<section class="card status-card" aria-labelledby="development-status-title">
+		<h2 id="development-status-title">Development Status</h2>
+		<p>This project is currently under active development. Core monitoring features will be added in later stages.</p>
+	</section>
+</main>
 {% endblock %}

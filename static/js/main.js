@@ -1,1 +1,1 @@
-// Genel JavaScript başlangıç dosyası.
+// Reserved for future UI behavior.

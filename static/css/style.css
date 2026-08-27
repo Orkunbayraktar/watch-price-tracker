@@ -1,1 +1,106 @@
-/* Genel stil dosyası için boş başlangıç alanı. */
+:root {
+	color-scheme: light;
+	--bg: #f5f7fb;
+	--surface: #ffffff;
+	--text: #1f2937;
+	--muted: #6b7280;
+	--border: #d8e0ea;
+	--accent: #1d4ed8;
+}
+
+* {
+	box-sizing: border-box;
+}
+
+body {
+	margin: 0;
+	font-family: Arial, Helvetica, sans-serif;
+	background: var(--bg);
+	color: var(--text);
+	line-height: 1.5;
+}
+
+a {
+	color: inherit;
+	text-decoration: none;
+}
+
+.page-shell {
+	max-width: 960px;
+	margin: 0 auto;
+	padding: 40px 20px;
+}
+
+.topbar {
+	display: flex;
+	flex-wrap: wrap;
+	justify-content: space-between;
+	gap: 24px;
+	align-items: flex-start;
+	margin-bottom: 24px;
+}
+
+.eyebrow {
+	margin: 0 0 8px;
+	font-size: 0.875rem;
+	letter-spacing: 0.08em;
+	text-transform: uppercase;
+	color: var(--accent);
+	font-weight: 700;
+}
+
+h1 {
+	margin: 0 0 8px;
+	font-size: clamp(2rem, 4vw, 3rem);
+}
+
+.subtitle {
+	margin: 0;
+	max-width: 44rem;
+	color: var(--muted);
+}
+
+.nav {
+	display: flex;
+	flex-wrap: wrap;
+	gap: 10px;
+}
+
+.nav-link {
+	display: inline-flex;
+	align-items: center;
+	padding: 10px 14px;
+	border: 1px solid var(--border);
+	border-radius: 999px;
+	background: var(--surface);
+	font-size: 0.95rem;
+}
+
+.nav-link.is-active {
+	border-color: var(--accent);
+	color: var(--accent);
+	font-weight: 700;
+}
+
+.nav-link.is-placeholder {
+	color: var(--muted);
+	cursor: default;
+}
+
+.card {
+	background: var(--surface);
+	border: 1px solid var(--border);
+	border-radius: 18px;
+	padding: 24px;
+	box-shadow: 0 8px 24px rgba(15, 23, 42, 0.04);
+}
+
+.status-card h2 {
+	margin: 0 0 8px;
+	font-size: 1.25rem;
+}
+
+.status-card p {
+	margin: 0;
+	color: var(--muted);
+}
