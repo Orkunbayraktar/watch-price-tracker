@@ -1,0 +1,1 @@
+"""Robots.txt kontrol mekanizması için test iskeleti."""

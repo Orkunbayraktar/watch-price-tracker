@@ -1,0 +1,1 @@
+"""Veritabanı katmanının başlangıç modülü."""

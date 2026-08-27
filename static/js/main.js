@@ -1,0 +1,1 @@
+// Genel JavaScript başlangıç dosyası.
