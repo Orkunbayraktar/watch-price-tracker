@@ -17,8 +17,8 @@ The goal of this project is to monitor selected watch brands and models on Trend
 - [ ] Hepsiburada scraper
 - [x] robots.txt control
 - [x] SQLite database
-- [ ] Product and seller records
-- [ ] Price history
+- [x] Product and seller records
+- [x] Price history
 - [ ] Flask web dashboard
 - [ ] Product filtering
 - [ ] Seller detail screen

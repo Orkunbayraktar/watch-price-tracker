@@ -16,7 +16,7 @@ class Product(db.Model):
 	__tablename__ = "products"
 
 	id = db.Column(db.Integer, primary_key=True)
-	brand = db.Column(db.String(120), nullable=False)
+	brand = db.Column(db.String(120), nullable=True)
 	model = db.Column(db.String(120), nullable=True)
 	name = db.Column(db.String(255), nullable=False)
 	created_at = db.Column(db.DateTime(timezone=True), nullable=False, default=utc_now)
@@ -58,7 +58,6 @@ class Seller(db.Model):
 	listings = db.relationship(
 		"Listing",
 		back_populates="seller",
-		cascade="all, delete-orphan",
 	)
 
 
@@ -66,10 +65,13 @@ class Listing(db.Model):
 	"""Marketplace listing for a product sold by a seller."""
 
 	__tablename__ = "listings"
+	__table_args__ = (
+		db.UniqueConstraint("platform", "external_product_id", "seller_id", name="uq_listing_platform_product_seller"),
+	)
 
 	id = db.Column(db.Integer, primary_key=True)
 	product_id = db.Column(db.Integer, db.ForeignKey("products.id", ondelete="CASCADE"), nullable=False)
-	seller_id = db.Column(db.Integer, db.ForeignKey("sellers.id", ondelete="CASCADE"), nullable=False)
+	seller_id = db.Column(db.Integer, db.ForeignKey("sellers.id", ondelete="SET NULL"), nullable=True)
 	platform = db.Column(db.String(50), nullable=False, index=True)
 	external_product_id = db.Column(db.String(120), nullable=True)
 	url = db.Column(db.Text, nullable=False)
