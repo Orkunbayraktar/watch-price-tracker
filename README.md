@@ -76,6 +76,7 @@ Activate it on Windows PowerShell:
 ## Development Status
 
 This project is an actively developed university internship project.
+The current implementation includes a Trendyol single-product scraper proof of concept, not a full marketplace scraper.
 
 ## Important Note
 
