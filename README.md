@@ -16,7 +16,7 @@ The goal of this project is to monitor selected watch brands and models on Trend
 - [ ] Trendyol scraper
 - [ ] Hepsiburada scraper
 - [ ] robots.txt control
-- [ ] SQLite database
+- [x] SQLite database
 - [ ] Product and seller records
 - [ ] Price history
 - [ ] Flask web dashboard
@@ -31,6 +31,7 @@ The goal of this project is to monitor selected watch brands and models on Trend
 - Python
 - Flask
 - SQLite
+- SQLAlchemy
 - HTML
 - CSS
 - JavaScript
