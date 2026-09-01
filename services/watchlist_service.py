@@ -96,7 +96,7 @@ def get_watchlist_item(item_id: int) -> WatchlistItem | None:
 
 def create_watchlist_item(url: str, display_name: str | None = None) -> WatchlistItem:
 	"""Validate and persist a new tracked product URL."""
-	canonical_url = _validate_and_normalize_watchlist_url(url)
+	canonical_url = validate_and_normalize_watchlist_url(url)
 	if WatchlistItem.query.filter_by(url=canonical_url).first() is not None:
 		raise WatchlistValidationError("This product URL is already being tracked.")
 
@@ -180,26 +180,37 @@ def update_active_watchlist_items(
 	)
 	if not active_items:
 		return None
-
-	item_ids_by_url = {item.url: item.id for item in active_items}
-
-	def handle_item_result(_index: int, _total: int, item_result) -> None:
-		item_id = item_ids_by_url.get(item_result.url)
-		if item_id is None:
-			return
-		update_last_scrape_metadata(
-			item_id,
-			last_scraped_at=item_result.finished_at,
-			last_scrape_status=item_result.status,
-			last_failure_reason=None if item_result.status == "success" else item_result.failure_reason,
-		)
-
-	return run_batch(
-		[item.url for item in active_items],
+	return _run_watchlist_batch(
+		active_items,
 		fetch_strategy=fetch_strategy,
 		headed=headed,
 		debug_parser=debug_parser,
-		on_item_result=handle_item_result,
+	)
+
+
+def update_selected_watchlist_items(
+	item_ids: list[int],
+	*,
+	fetch_strategy: str = DEFAULT_WATCHLIST_FETCH_STRATEGY,
+	headed: bool = False,
+	debug_parser: bool = False,
+) -> BatchScrapeResult | None:
+	"""Update selected active watchlist items through the shared batch path."""
+	if not item_ids:
+		return None
+	items = (
+		WatchlistItem.query
+		.filter(WatchlistItem.id.in_(item_ids), WatchlistItem.is_active.is_(True))
+		.order_by(WatchlistItem.created_at.asc(), WatchlistItem.id.asc())
+		.all()
+	)
+	if not items:
+		return None
+	return _run_watchlist_batch(
+		items,
+		fetch_strategy=fetch_strategy,
+		headed=headed,
+		debug_parser=debug_parser,
 	)
 
 
@@ -217,24 +228,16 @@ def update_watchlist_item(
 	if not item.is_active:
 		raise WatchlistValidationError("Activate this watchlist item before retrying it.")
 
-	def handle_item_result(_index: int, _total: int, item_result) -> None:
-		update_last_scrape_metadata(
-			item.id,
-			last_scraped_at=item_result.finished_at,
-			last_scrape_status=item_result.status,
-			last_failure_reason=None if item_result.status == "success" else item_result.failure_reason,
-		)
-
-	return run_batch(
-		[item.url],
+	return _run_watchlist_batch(
+		[item],
 		fetch_strategy=fetch_strategy,
 		headed=headed,
 		debug_parser=debug_parser,
-		on_item_result=handle_item_result,
 	)
 
 
-def _validate_and_normalize_watchlist_url(url: str) -> str:
+def validate_and_normalize_watchlist_url(url: str) -> str:
+	"""Validate and normalize one supported marketplace product URL."""
 	normalized_url = normalize_tracking_url(url)
 	if not normalized_url:
 		raise WatchlistValidationError("Enter a Trendyol or Hepsiburada product URL.")
@@ -252,6 +255,35 @@ def _validate_and_normalize_watchlist_url(url: str) -> str:
 		raise WatchlistValidationError("Only supported Trendyol and Hepsiburada product URLs can be tracked.")
 
 	return normalized_url
+
+
+def _run_watchlist_batch(
+	items: list[WatchlistItem],
+	*,
+	fetch_strategy: str,
+	headed: bool,
+	debug_parser: bool,
+) -> BatchScrapeResult:
+	item_ids_by_url = {item.url: item.id for item in items}
+
+	def handle_item_result(_index: int, _total: int, item_result) -> None:
+		item_id = item_ids_by_url.get(item_result.url)
+		if item_id is None:
+			return
+		update_last_scrape_metadata(
+			item_id,
+			last_scraped_at=item_result.finished_at,
+			last_scrape_status=item_result.status,
+			last_failure_reason=None if item_result.status == "success" else item_result.failure_reason,
+		)
+
+	return run_batch(
+		[item.url for item in items],
+		fetch_strategy=fetch_strategy,
+		headed=headed,
+		debug_parser=debug_parser,
+		on_item_result=handle_item_result,
+	)
 
 
 def _clean_display_name(value: str | None) -> str | None:

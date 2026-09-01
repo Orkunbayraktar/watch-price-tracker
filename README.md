@@ -164,6 +164,17 @@ This project does not attempt to bypass platform protections, fake browser ident
 - Manual retry runs one active item through the existing Playwright watchlist/batch path, creates the normal `ScrapeRun` and `ScrapeRunItem` records, and refreshes watchlist status metadata. Platform blocks, including Hepsiburada blocking, remain recorded failures; no bypass or automatic retry is attempted.
 - Data Quality and Watchlist views bulk-load attempt and listing context in fixed query sets rather than issuing per-row queries. The main dashboard includes a compact healthy, stale, blocked, and failed summary with a link to the full page.
 
+## Scraping Control Center
+
+- The `/scraping` page centralizes normal synchronous scraping operations in the Flask interface. It shows real active and paused Watchlist counts, the latest run, recent runs, structured failures, latest known prices, and Data Quality health states.
+- `Update Active Products` sends every active Watchlist URL through the existing Watchlist service and sequential batch workflow. `Update Selected` accepts checkbox-selected items, updates only active selections, and reports paused selections as skipped without activating them.
+- `Scrape One Product` validates a supported Trendyol or Hepsiburada product URL and sends it directly through the existing batch orchestration, ScrapeRun tracking, scraper, persistence, Listing, and PriceHistory flow. The URL does not need to be added to the Watchlist.
+- Control Center scraping defaults to Playwright, preserving the established Trendyol live-acquisition path. Hepsiburada may still return HTTP 403 or `blocked_by_platform`; these outcomes remain structured failures and are displayed without attempting a bypass.
+- A database check prevents a new Control Center operation when a ScrapeRun is already marked `running`. Execution remains synchronous and local; no scheduler, queue, worker, concurrency, or distributed lock has been added.
+- Recent Runs links to the existing ScrapeRun detail page, while Recent Failures reuses Data Quality's concise failure-reason mapping. Watchlist health, pause/activate, retry, product navigation, and non-destructive removal continue to use their existing services and routes.
+- Lightweight browser behavior disables submitted scraping buttons and shows an in-progress label to reduce accidental double-clicks. Backend validation and running-run checks remain authoritative.
+- **Brand / Catalog Discovery — planned.** The Control Center includes a non-functional Product Discovery placeholder so a future permitted discovery and preview flow can feed selected URLs into the existing Watchlist service. No brand, category, search-page, or catalog crawler exists yet.
+
 ## Price Intelligence
 
 - Price history observations are preserved exactly as recorded; analytics separately derive real price changes by skipping consecutive duplicate prices.

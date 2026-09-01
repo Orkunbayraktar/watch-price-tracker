@@ -124,6 +124,7 @@ def is_active_nav(section: str) -> bool:
 		"scrape_runs": {"main.scrape_runs", "main.scrape_run_detail"},
 		"watchlist": {"main.watchlist", "main.add_watchlist_item", "main.toggle_watchlist_item", "main.remove_watchlist_item", "main.update_watchlist"},
 		"data_quality": {"main.data_quality", "main.retry_data_quality_item"},
+		"scraping": {"main.scraping_control", "main.scraping_update_active", "main.scraping_update_selected", "main.scraping_scrape_one"},
 		"import": {"main.import_data"},
 	}
 	return endpoint in sections.get(section, set())

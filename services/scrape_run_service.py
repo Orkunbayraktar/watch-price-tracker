@@ -71,6 +71,14 @@ def get_recent_scrape_run_summaries(limit: int = 5) -> list[ScrapeRunSummary]:
 	return [_build_run_summary(run) for run in runs]
 
 
+def get_running_scrape_run_summary() -> ScrapeRunSummary | None:
+	"""Return the newest run still marked running, if one exists."""
+	run = _base_run_query().filter(ScrapeRun.status == "running").first()
+	if run is None:
+		return None
+	return _build_run_summary(run)
+
+
 def get_scrape_run_detail(run_id: int) -> ScrapeRunDetailData | None:
 	"""Return one scrape run and its item-level results."""
 	run = _base_run_query().filter(ScrapeRun.id == run_id).first()

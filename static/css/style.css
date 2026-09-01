@@ -62,6 +62,28 @@ select {
 	font: inherit;
 }
 
+button,
+input[type="checkbox"] {
+	cursor: pointer;
+}
+
+button:disabled,
+input:disabled {
+	cursor: not-allowed;
+}
+
+.sr-only {
+	position: absolute;
+	width: 1px;
+	height: 1px;
+	padding: 0;
+	margin: -1px;
+	overflow: hidden;
+	clip: rect(0, 0, 0, 0);
+	white-space: nowrap;
+	border: 0;
+}
+
 a:focus-visible,
 button:focus-visible,
 input:focus-visible,
@@ -297,6 +319,22 @@ h3 {
 	color: var(--text);
 }
 
+.button--danger-ghost {
+	background: transparent;
+	border-color: #efb5ae;
+	color: var(--danger);
+}
+
+.button--danger-ghost:hover {
+	background: var(--danger-soft);
+}
+
+.button--compact {
+	min-height: 44px;
+	padding: 0 var(--space-3);
+	font-size: 0.84rem;
+}
+
 .button.is-disabled {
 	opacity: 0.5;
 	pointer-events: none;
@@ -313,6 +351,10 @@ h3 {
 }
 
 .metrics-grid--product-intelligence {
+	grid-template-columns: repeat(5, minmax(0, 1fr));
+}
+
+.control-metrics {
 	grid-template-columns: repeat(5, minmax(0, 1fr));
 }
 
@@ -680,6 +722,191 @@ h3 {
 .table-actions--stacked .button,
 .table-actions--stacked form {
 	width: 100%;
+}
+
+.operation-banner {
+	display: flex;
+	align-items: center;
+	justify-content: space-between;
+	gap: var(--space-5);
+	padding: var(--space-5) var(--space-6);
+	border: 1px solid #f1d29a;
+	border-left: 4px solid var(--warning);
+	border-radius: var(--radius-lg);
+	background: var(--warning-soft);
+	color: var(--warning);
+}
+
+.operation-banner p {
+	margin: var(--space-1) 0 0;
+	color: var(--text);
+}
+
+.control-result-grid {
+	grid-template-columns: repeat(6, minmax(0, 1fr));
+}
+
+.single-scrape-result,
+.run-overview-grid {
+	display: grid;
+	grid-template-columns: repeat(auto-fit, minmax(170px, 1fr));
+	gap: var(--space-3);
+	margin-top: var(--space-5);
+}
+
+.single-scrape-result > div,
+.run-overview-grid > div {
+	display: grid;
+	gap: var(--space-1);
+	padding: var(--space-4);
+	border: 1px solid var(--border);
+	border-radius: var(--radius-md);
+	background: var(--surface-muted);
+}
+
+.single-scrape-result span,
+.run-overview-grid span {
+	font-size: 0.8rem;
+	font-weight: 700;
+	letter-spacing: 0.04em;
+	text-transform: uppercase;
+	color: var(--text-muted);
+}
+
+.operation-failures {
+	display: grid;
+	gap: var(--space-3);
+	margin-top: var(--space-5);
+}
+
+.failure-list {
+	display: grid;
+	gap: var(--space-3);
+	margin: 0;
+	padding: 0;
+	list-style: none;
+}
+
+.failure-list li {
+	display: grid;
+	gap: var(--space-1);
+	padding: var(--space-3) var(--space-4);
+	border: 1px solid #efb5ae;
+	border-radius: var(--radius-sm);
+	background: var(--danger-soft);
+}
+
+.failure-list li > div {
+	display: flex;
+	align-items: center;
+	gap: var(--space-3);
+	flex-wrap: wrap;
+}
+
+.failure-list li > span {
+	overflow-wrap: anywhere;
+	color: var(--text-muted);
+	font-size: 0.9rem;
+}
+
+.control-section-heading {
+	align-items: flex-end;
+}
+
+[data-selected-submit] {
+	gap: var(--space-1);
+}
+
+.control-watchlist-table {
+	min-width: 1320px;
+}
+
+.selection-cell {
+	width: 52px;
+	text-align: center !important;
+}
+
+.control-checkbox {
+	width: 24px;
+	height: 24px;
+	accent-color: var(--accent);
+	vertical-align: middle;
+}
+
+.control-row-actions {
+	min-width: 210px;
+}
+
+.control-remove-form {
+	margin-left: auto;
+}
+
+.result-reason {
+	display: block;
+	margin-top: var(--space-2);
+	font-size: 0.78rem;
+	color: var(--text-muted);
+}
+
+.control-activity-grid,
+.control-utility-grid {
+	display: grid;
+	gap: var(--space-6);
+}
+
+.control-utility-grid {
+	grid-template-columns: repeat(2, minmax(0, 1fr));
+}
+
+.compact-data-table {
+	min-width: 880px;
+}
+
+.failure-table {
+	min-width: 760px;
+}
+
+.utility-card {
+	display: flex;
+	flex-direction: column;
+	min-width: 0;
+}
+
+.single-scrape-form {
+	display: grid;
+	grid-template-columns: minmax(0, 1fr) auto;
+	align-items: end;
+	gap: var(--space-4);
+}
+
+.field-help {
+	margin: 0;
+	font-size: 0.88rem;
+	color: var(--text-muted);
+}
+
+.feature-status-badge {
+	display: inline-flex;
+	align-items: center;
+	min-height: 32px;
+	padding: 0 var(--space-3);
+	border: 1px solid var(--border);
+	border-radius: 999px;
+	background: var(--surface-strong);
+	color: var(--text-muted);
+	font-size: 0.8rem;
+	font-weight: 700;
+	white-space: nowrap;
+}
+
+.discovery-placeholder {
+	background: linear-gradient(135deg, var(--surface) 0%, var(--surface-muted) 100%);
+}
+
+.discovery-placeholder > p {
+	max-width: 65ch;
+	margin: 0;
+	color: var(--text-muted);
 }
 
 .tracking-status-badge {
@@ -1113,6 +1340,7 @@ h3 {
 	.metrics-grid,
 	.metrics-grid--detail,
 	.metrics-grid--product-intelligence,
+	.control-metrics,
 	.detail-meta__row {
 		grid-template-columns: repeat(2, minmax(0, 1fr));
 	}
@@ -1127,6 +1355,14 @@ h3 {
 	.quality-filter-form,
 	.quality-dashboard-grid {
 		grid-template-columns: repeat(2, minmax(0, 1fr));
+	}
+
+	.control-result-grid {
+		grid-template-columns: repeat(3, minmax(0, 1fr));
+	}
+
+	.control-utility-grid {
+		grid-template-columns: 1fr;
 	}
 
 	.form-field--wide {
@@ -1179,18 +1415,26 @@ h3 {
 		flex-direction: column;
 		align-items: stretch;
 	}
+
+	.operation-banner {
+		align-items: flex-start;
+		flex-direction: column;
+	}
 }
 
 @media (max-width: 680px) {
 	.metrics-grid,
 	.metrics-grid--detail,
 	.metrics-grid--product-intelligence,
+	.control-metrics,
 	.detail-meta__row,
 	.filter-form,
 	.import-form,
 	.watchlist-form,
 	.quality-filter-form,
-	.quality-dashboard-grid {
+	.quality-dashboard-grid,
+	.control-result-grid,
+	.single-scrape-form {
 		grid-template-columns: 1fr;
 	}
 
@@ -1220,5 +1464,30 @@ h3 {
 	.history-controls .button,
 	.history-controls__field {
 		width: 100%;
+	}
+
+	.control-section-heading {
+		align-items: stretch;
+		flex-direction: column;
+	}
+
+	.control-section-heading form,
+	.control-section-heading .button,
+	.single-scrape-form .button {
+		width: 100%;
+	}
+}
+
+@media (prefers-reduced-motion: reduce) {
+	html {
+		scroll-behavior: auto;
+	}
+
+	*,
+	*::before,
+	*::after {
+		transition-duration: 0.01ms !important;
+		animation-duration: 0.01ms !important;
+		animation-iteration-count: 1 !important;
 	}
 }

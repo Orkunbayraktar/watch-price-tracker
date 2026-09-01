@@ -1,0 +1,288 @@
+{% extends "base.html" %}
+
+{% macro return_to_scraping() %}
+<input type="hidden" name="return_to" value="scraping">
+{% endmacro %}
+
+{% block title %}Scraping Control | Watch Price Tracker{% endblock %}
+{% block page_title %}Scraping Control Center{% endblock %}
+{% block page_description %}Run synchronous marketplace updates, inspect outcomes, and manage tracked products from one operational screen.{% endblock %}
+{% block page_actions %}
+<form method="post" action="{{ url_for('main.scraping_update_active') }}" data-submit-once>
+	<button class="button button--primary" type="submit" data-submitting-label="Updating..."{% if control.active_count == 0 or control.running_run %} disabled{% endif %}>Update Active Products</button>
+</form>
+<a class="button button--ghost" href="{{ url_for('main.data_quality') }}">View Data Quality</a>
+{% endblock %}
+
+{% block content %}
+{% if control.running_run %}
+<section class="operation-banner" role="status" aria-live="polite">
+	<div>
+		<strong>A scraping run is already in progress.</strong>
+		<p>Run ID {{ control.running_run.run_id }} started {{ control.running_run.started_at|format_datetime }}. New Control Center runs are temporarily blocked.</p>
+	</div>
+	<a class="button button--secondary" href="{{ url_for('main.scrape_run_detail', run_id=control.running_run.run_id) }}">Open Running Run</a>
+</section>
+{% endif %}
+
+<section class="metrics-grid control-metrics" aria-label="Scraping operations summary">
+	<article class="card metric-card">
+		<p class="metric-card__label">Active Products</p>
+		<p class="metric-card__value">{{ control.active_count }}</p>
+	</article>
+	<article class="card metric-card">
+		<p class="metric-card__label">Paused Products</p>
+		<p class="metric-card__value">{{ control.paused_count }}</p>
+	</article>
+	<article class="card metric-card">
+		<p class="metric-card__label">Last Run</p>
+		<p class="metric-card__value metric-card__value--small">{% if control.latest_run %}#{{ control.latest_run.run_id }}{% else %}No runs{% endif %}</p>
+	</article>
+	<article class="card metric-card">
+		<p class="metric-card__label">Successful Last Run Items</p>
+		<p class="metric-card__value{% if not control.latest_run %} metric-card__value--small{% endif %}">{{ control.latest_run.successful_items if control.latest_run else 'Not available' }}</p>
+	</article>
+	<article class="card metric-card">
+		<p class="metric-card__label">Failed Last Run Items</p>
+		<p class="metric-card__value{% if not control.latest_run %} metric-card__value--small{% endif %}">{{ control.latest_run.failed_items if control.latest_run else 'Not available' }}</p>
+	</article>
+</section>
+
+{% if action_result %}
+<section class="card result-card" aria-live="polite">
+	<div class="section-heading">
+		<div>
+			<p class="eyebrow">Completed Operation</p>
+			<h2>{{ action_result.title }}</h2>
+			<p class="section-copy">Final synchronous results from the existing ScrapeRun workflow.</p>
+		</div>
+		{% if action_result.batch_result %}
+		<a class="button button--secondary" href="{{ url_for('main.scrape_run_detail', run_id=action_result.batch_result.run_id) }}">Open Run Detail</a>
+		{% endif %}
+	</div>
+
+	{% if action_result.batch_result %}
+	<div class="result-grid control-result-grid">
+		<article class="result-stat"><p class="result-label">Run ID</p><strong>{{ action_result.batch_result.run_id }}</strong></article>
+		<article class="result-stat"><p class="result-label">Total</p><strong>{{ action_result.batch_result.total }}</strong></article>
+		<article class="result-stat"><p class="result-label">Successful</p><strong>{{ action_result.batch_result.successful }}</strong></article>
+		<article class="result-stat"><p class="result-label">Failed</p><strong>{{ action_result.batch_result.failed }}</strong></article>
+		<article class="result-stat"><p class="result-label">Skipped</p><strong>{{ action_result.batch_result.skipped + action_result.skipped_paused + action_result.skipped_missing }}</strong></article>
+		<article class="result-stat"><p class="result-label">Duration</p><strong>{{ action_result.batch_result.duration }}</strong></article>
+	</div>
+
+	{% if action_result.kind == 'single' and action_result.single_item and action_result.single_item.status == 'success' %}
+	<div class="single-scrape-result">
+		<div><span>Product</span><strong>{{ action_result.single_item.product_name or 'Persisted product' }}</strong></div>
+		<div><span>Platform</span><strong>{{ action_result.single_item.platform|platform_label }}</strong></div>
+		<div><span>Current Price</span><strong>{{ action_result.single_item.current_price|format_price(action_result.single_item.currency or 'TRY') }}</strong></div>
+		<div><span>Listing ID</span><strong>{{ action_result.single_item.listing_id }}</strong></div>
+		<div><span>Scraped At</span><strong>{{ action_result.single_item.finished_at|format_datetime }}</strong></div>
+	</div>
+	{% endif %}
+
+	{% if action_result.failed_items %}
+	<div class="operation-failures">
+		<h3>Failed Items</h3>
+		<ul class="failure-list">
+			{% for item in action_result.failed_items %}
+			<li>
+				<div><strong>{{ item.failure_message }}</strong><code>{{ item.failure_reason }}</code></div>
+				<span>{{ item.platform|platform_label }} | {{ item.url }}</span>
+			</li>
+			{% endfor %}
+		</ul>
+	</div>
+	{% endif %}
+	{% else %}
+	<div class="empty-state empty-state--compact">
+		<h3>No products were updated.</h3>
+		<p>{% if action_result.skipped_paused %}{{ action_result.skipped_paused }} selected paused item(s) were safely skipped and remain paused.{% else %}No active products were available for this operation.{% endif %}</p>
+	</div>
+	{% endif %}
+</section>
+{% endif %}
+
+<section class="card data-section control-watchlist">
+	<div class="section-heading control-section-heading">
+		<div>
+			<h2>Operational Watchlist</h2>
+			<p class="section-copy">Select active products for a targeted update. Paused products remain paused and cannot be selected in the interface.</p>
+		</div>
+		<form id="selected-update-form" method="post" action="{{ url_for('main.scraping_update_selected') }}" data-submit-once>
+			<button class="button button--secondary" type="submit" data-selected-submit data-submitting-label="Updating..."{% if control.active_count == 0 or control.running_run %} disabled{% endif %}>Update Selected <span data-selection-count>(0)</span></button>
+		</form>
+	</div>
+
+	{% if control.watchlist_items %}
+	<div class="table-wrap">
+		<table class="data-table control-watchlist-table">
+			<thead>
+				<tr>
+					<th scope="col" class="selection-cell">
+						<label class="sr-only" for="select-all-products">Select all active products</label>
+						<input id="select-all-products" class="control-checkbox" type="checkbox" data-select-all aria-label="Select all active products">
+					</th>
+					<th scope="col">Status</th>
+					<th scope="col">Platform</th>
+					<th scope="col">Product / Label</th>
+					<th scope="col">Latest Price</th>
+					<th scope="col">Last Scrape</th>
+					<th scope="col">Health</th>
+					<th scope="col">Last Result</th>
+					<th scope="col">Actions</th>
+				</tr>
+			</thead>
+			<tbody>
+				{% for item in control.watchlist_items %}
+				<tr>
+					<td class="selection-cell">
+						<label class="sr-only" for="select-product-{{ item.id }}">Select {{ item.display_name or (item.linked_listing.product_name if item.linked_listing else 'tracked product') }}</label>
+						<input id="select-product-{{ item.id }}" class="control-checkbox" type="checkbox" name="item_ids" value="{{ item.id }}" form="selected-update-form" data-item-select{% if not item.is_active %} disabled{% endif %}>
+					</td>
+					<td><span class="tracking-status-badge tracking-status-badge--{{ 'active' if item.is_active else 'paused' }}">{{ 'Active' if item.is_active else 'Paused' }}</span></td>
+					<td><span class="{{ item.platform|platform_badge_class }}">{{ item.platform|platform_label }}</span></td>
+					<td>
+						<div class="watchlist-primary">
+							<strong>{{ item.display_name or (item.linked_listing.product_name if item.linked_listing else 'Tracked product') }}</strong>
+							{% if item.linked_listing and item.display_name %}<span class="table-meta">{{ item.linked_listing.product_name }}</span>{% endif %}
+						</div>
+					</td>
+					<td>{% if item.linked_listing %}{{ item.linked_listing.current_price|format_price(item.linked_listing.currency) }}{% else %}<span class="table-meta">No price data</span>{% endif %}</td>
+					<td>{{ item.last_scraped_at|format_datetime if item.last_scraped_at else 'Not scraped yet' }}</td>
+					<td><span class="health-badge {{ item.health.css_class }}"><span class="health-badge__dot" aria-hidden="true"></span>{{ item.health.label }}</span></td>
+					<td>
+						{% if item.last_scrape_status %}
+						<span class="run-status-badge run-status-badge--{{ item.last_scrape_status }}">{{ item.last_scrape_status|replace('_', ' ')|title }}</span>
+						{% if item.last_failure_reason %}<code class="result-reason">{{ item.last_failure_reason }}</code>{% endif %}
+						{% else %}<span class="table-meta">No runs yet</span>{% endif %}
+					</td>
+					<td>
+						<div class="table-actions control-row-actions">
+							<form method="post" action="{{ url_for('main.retry_data_quality_item', item_id=item.id) }}" data-submit-once>
+								{{ return_to_scraping() }}
+								<button class="button button--secondary button--compact" type="submit" data-submitting-label="Retrying..."{% if not item.is_active %} disabled{% endif %}>Retry</button>
+							</form>
+							<form method="post" action="{{ url_for('main.toggle_watchlist_item', item_id=item.id) }}">
+								{{ return_to_scraping() }}
+								<button class="button button--ghost button--compact" type="submit">{{ 'Pause' if item.is_active else 'Activate' }}</button>
+							</form>
+							{% if item.linked_listing %}<a class="button button--ghost button--compact" href="{{ url_for('main.product_detail', product_id=item.linked_listing.product_id) }}">View Product</a>{% endif %}
+							<form class="control-remove-form" method="post" action="{{ url_for('main.remove_watchlist_item', item_id=item.id) }}" data-confirm-message="Remove this URL from the Watchlist? Persisted product and price history will be kept.">
+								{{ return_to_scraping() }}
+								<button class="button button--danger-ghost button--compact" type="submit">Remove</button>
+							</form>
+						</div>
+					</td>
+				</tr>
+				{% endfor %}
+			</tbody>
+		</table>
+	</div>
+	{% else %}
+	<div class="empty-state">
+		<h3>No products are currently being tracked.</h3>
+		<p>Add supported marketplace product URLs to the Watchlist before running selected or active updates.</p>
+		<a class="button button--secondary" href="{{ url_for('main.watchlist') }}">Open Watchlist</a>
+	</div>
+	{% endif %}
+</section>
+
+<section class="card data-section">
+	<div class="section-heading">
+		<div>
+			<h2>Latest Run Status</h2>
+			<p class="section-copy">The most recent persisted ScrapeRun and its final item totals.</p>
+		</div>
+	</div>
+	{% if control.latest_run %}
+	<div class="run-overview-grid">
+		<div><span>Run ID</span><a class="table-link" href="{{ url_for('main.scrape_run_detail', run_id=control.latest_run.run_id) }}">{{ control.latest_run.run_id }}</a></div>
+		<div><span>Platform</span><strong>{{ control.latest_run.platform|platform_label }}</strong></div>
+		<div><span>Status</span><strong><span class="run-status-badge run-status-badge--{{ control.latest_run.status }}">{{ control.latest_run.status|replace('_', ' ')|title }}</span></strong></div>
+		<div><span>Started</span><strong>{{ control.latest_run.started_at|format_datetime }}</strong></div>
+		<div><span>Finished</span><strong>{{ control.latest_run.finished_at|format_datetime }}</strong></div>
+		<div><span>Duration</span><strong>{{ control.latest_run.duration or 'In progress' }}</strong></div>
+		<div><span>Total</span><strong>{{ control.latest_run.total_items }}</strong></div>
+		<div><span>Successful</span><strong>{{ control.latest_run.successful_items }}</strong></div>
+		<div><span>Failed</span><strong>{{ control.latest_run.failed_items }}</strong></div>
+	</div>
+	{% else %}
+	<div class="empty-state empty-state--compact"><h3>No scraping runs have been recorded yet.</h3><p>Run an active, selected, or single-product scrape to create operational history.</p></div>
+	{% endif %}
+</section>
+
+<section class="control-activity-grid">
+	<article class="card data-section">
+		<div class="section-heading">
+			<div><h2>Recent Runs</h2><p class="section-copy">The latest 10 stored scraping operations.</p></div>
+			<a class="button button--ghost" href="{{ url_for('main.scrape_runs') }}">View All Runs</a>
+		</div>
+		{% if control.recent_runs %}
+		<div class="table-wrap">
+			<table class="data-table compact-data-table">
+				<thead><tr><th scope="col">Run ID</th><th scope="col">Started</th><th scope="col">Platform</th><th scope="col">Status</th><th scope="col">Successful</th><th scope="col">Failed</th><th scope="col">Duration</th><th scope="col">Details</th></tr></thead>
+				<tbody>
+				{% for run in control.recent_runs %}
+				<tr>
+					<td>{{ run.run_id }}</td><td>{{ run.started_at|format_datetime }}</td><td>{{ run.platform|platform_label }}</td>
+					<td><span class="run-status-badge run-status-badge--{{ run.status }}">{{ run.status|replace('_', ' ')|title }}</span></td>
+					<td>{{ run.successful_items }}</td><td>{{ run.failed_items }}</td><td>{{ run.duration or 'In progress' }}</td>
+					<td><a class="table-link" href="{{ url_for('main.scrape_run_detail', run_id=run.run_id) }}">Open</a></td>
+				</tr>
+				{% endfor %}
+				</tbody>
+			</table>
+		</div>
+		{% else %}<div class="empty-state empty-state--compact"><h3>No scraping runs have been recorded yet.</h3><p>Completed operations will appear here.</p></div>{% endif %}
+	</article>
+
+	<article class="card data-section">
+		<div class="section-heading">
+			<div><h2>Recent Failures</h2><p class="section-copy">Structured item-level failures with concise recovery context.</p></div>
+			<a class="button button--ghost" href="{{ url_for('main.data_quality') }}">Open Data Quality</a>
+		</div>
+		{% if control.recent_failures %}
+		<div class="table-wrap">
+			<table class="data-table compact-data-table failure-table">
+				<thead><tr><th scope="col">Product / Label</th><th scope="col">Platform</th><th scope="col">Failure Reason</th><th scope="col">Time</th><th scope="col">Run ID</th></tr></thead>
+				<tbody>
+				{% for failure in control.recent_failures %}
+				<tr>
+					<td><strong>{{ failure.product_label }}</strong></td><td>{{ failure.platform|platform_label }}</td>
+					<td><strong>{{ failure.failure_message }}</strong><code class="result-reason">{{ failure.failure_reason }}</code></td>
+					<td>{{ failure.failed_at|format_datetime }}</td>
+					<td><a class="table-link" href="{{ url_for('main.scrape_run_detail', run_id=failure.run_id) }}">Run {{ failure.run_id }}</a></td>
+				</tr>
+				{% endfor %}
+				</tbody>
+			</table>
+		</div>
+		{% else %}<div class="empty-state empty-state--compact"><h3>No recent scraping failures.</h3><p>Failed item-level results will appear here with their structured reason.</p></div>{% endif %}
+	</article>
+</section>
+
+<section class="control-utility-grid">
+	<article class="card utility-card">
+		<div class="section-heading">
+			<div><h2>Scrape One Product</h2><p class="section-copy">Scrape a supported Trendyol or Hepsiburada product without adding it to the Watchlist.</p></div>
+		</div>
+		<form class="single-scrape-form" method="post" action="{{ url_for('main.scraping_scrape_one') }}" data-submit-once>
+			<div class="form-field">
+				<label for="single-product-url">Product URL</label>
+				<input id="single-product-url" name="url" type="url" inputmode="url" value="{{ manual_url }}" placeholder="https://www.trendyol.com/..." aria-describedby="single-product-help" required>
+				<p id="single-product-help" class="field-help">Only supported HTTP or HTTPS marketplace product URLs are accepted.</p>
+			</div>
+			<button class="button button--secondary" type="submit" data-submitting-label="Scraping..."{% if control.running_run %} disabled{% endif %}>Scrape Product</button>
+		</form>
+	</article>
+
+	<article class="card utility-card discovery-placeholder">
+		<div class="section-heading">
+			<div><h2>Product Discovery</h2><p class="section-copy">Discover marketplace products by brand or category and add selected products to your Watchlist.</p></div>
+			<span class="feature-status-badge">Coming soon</span>
+		</div>
+		<p>Brand and catalog discovery is planned. No discovery crawler or marketplace search operation is active in this version.</p>
+	</article>
+</section>
+{% endblock %}

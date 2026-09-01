@@ -19,6 +19,7 @@
             <nav class="sidebar-nav">
                 <a class="sidebar-link{% if is_active_nav('dashboard') %} is-active{% endif %}" href="{{ url_for('main.index') }}">Dashboard</a>
                 <a class="sidebar-link{% if is_active_nav('watchlist') %} is-active{% endif %}" href="{{ url_for('main.watchlist') }}">Watchlist</a>
+                <a class="sidebar-link{% if is_active_nav('scraping') %} is-active{% endif %}" href="{{ url_for('main.scraping_control') }}">Scraping</a>
                 <a class="sidebar-link{% if is_active_nav('data_quality') %} is-active{% endif %}" href="{{ url_for('main.data_quality') }}">Data Quality</a>
                 <a class="sidebar-link{% if is_active_nav('products') %} is-active{% endif %}" href="{{ url_for('main.products') }}">Products</a>
                 <a class="sidebar-link{% if is_active_nav('sellers') %} is-active{% endif %}" href="{{ url_for('main.sellers') }}">Sellers</a>

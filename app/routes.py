@@ -11,6 +11,14 @@ from services.import_service import ImportServiceError, commit_import, preview_i
 from services.price_analysis_service import get_product_price_intelligence_page
 from services.product_service import list_products
 from services.scrape_run_service import get_recent_scrape_run_summaries, get_scrape_run_detail
+from services.scraping_control_service import (
+	ScrapingControlValidationError,
+	ScrapingRunInProgressError,
+	get_scraping_control_data,
+	scrape_one_product,
+	update_all_active_products,
+	update_selected_products,
+)
 from services.seller_service import get_seller_detail, list_sellers
 from services.watchlist_service import (
 	WatchlistValidationError,
@@ -99,6 +107,62 @@ def data_quality() -> str:
 		page=request.args.get("page", 1, type=int) or 1,
 	)
 	return render_template("data_quality.html", quality_page=quality_page)
+
+
+@main_bp.route("/scraping")
+def scraping_control() -> str:
+	"""Render the centralized synchronous scraping operations screen."""
+	return _render_scraping_control()
+
+
+@main_bp.route("/scraping/update-active", methods=["POST"])
+def scraping_update_active() -> str:
+	"""Update all active products through the Control Center service."""
+	try:
+		action_result = update_all_active_products()
+		_flash_scraping_action_result(action_result)
+		return _render_scraping_control(action_result=action_result)
+	except ScrapingRunInProgressError as error:
+		flash(str(error), "warning")
+	except Exception:
+		logger.exception("Unexpected error while updating active products from the Control Center")
+		flash("An unexpected error occurred while updating active products.", "error")
+	return _render_scraping_control()
+
+
+@main_bp.route("/scraping/update-selected", methods=["POST"])
+def scraping_update_selected() -> str:
+	"""Update selected active products and report paused selections as skipped."""
+	try:
+		action_result = update_selected_products(request.form.getlist("item_ids"))
+		_flash_scraping_action_result(action_result)
+		return _render_scraping_control(action_result=action_result)
+	except ScrapingControlValidationError as error:
+		flash(str(error), "warning")
+	except ScrapingRunInProgressError as error:
+		flash(str(error), "warning")
+	except Exception:
+		logger.exception("Unexpected error while updating selected Control Center products")
+		flash("An unexpected error occurred while updating selected products.", "error")
+	return _render_scraping_control()
+
+
+@main_bp.route("/scraping/scrape-one", methods=["POST"])
+def scraping_scrape_one() -> str:
+	"""Validate and synchronously scrape one supported marketplace URL."""
+	submitted_url = request.form.get("url", "")
+	try:
+		action_result = scrape_one_product(submitted_url)
+		_flash_scraping_action_result(action_result)
+		return _render_scraping_control(action_result=action_result, manual_url=submitted_url)
+	except WatchlistValidationError as error:
+		flash(str(error), "error")
+	except ScrapingRunInProgressError as error:
+		flash(str(error), "warning")
+	except Exception:
+		logger.exception("Unexpected error while scraping one product from the Control Center")
+		flash("An unexpected error occurred while scraping this product.", "error")
+	return _render_scraping_control(manual_url=submitted_url)
 
 
 @main_bp.route("/sellers/<int:seller_id>")
@@ -275,9 +339,42 @@ def _render_watchlist_page(*, update_result=None, form_values: dict[str, str] | 
 	)
 
 
+def _render_scraping_control(*, action_result=None, manual_url: str = "") -> str:
+	return render_template(
+		"scraping_control.html",
+		control=get_scraping_control_data(),
+		action_result=action_result,
+		manual_url=manual_url,
+	)
+
+
+def _flash_scraping_action_result(action_result) -> None:
+	batch_result = action_result.batch_result
+	if batch_result is None:
+		if action_result.skipped_paused:
+			flash(
+				f"No active selected products were updated. {action_result.skipped_paused} paused item(s) were skipped.",
+				"warning",
+			)
+		else:
+			flash("No active watchlist products are available for updating.", "warning")
+		return
+
+	message = (
+		f"Run ID {batch_result.run_id} finished: {batch_result.successful} successful, "
+		f"{batch_result.failed} failed."
+	)
+	if action_result.skipped_paused:
+		message += f" {action_result.skipped_paused} paused item(s) skipped."
+	flash(message, "success" if batch_result.failed == 0 else "warning")
+
+
 def _watchlist_action_redirect(*, default_endpoint: str = "main.watchlist"):
-	"""Return safely to Data Quality while preserving validated page controls."""
-	if request.form.get("return_to") != "data_quality":
+	"""Return safely to an approved operational page after watchlist actions."""
+	return_to = request.form.get("return_to")
+	if return_to == "scraping":
+		return redirect(url_for("main.scraping_control"))
+	if return_to != "data_quality":
 		return redirect(url_for(default_endpoint))
 	allowed_keys = {"status", "platform", "tracking", "search", "sort", "page"}
 	params = {
