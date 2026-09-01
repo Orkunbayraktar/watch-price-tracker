@@ -99,6 +99,13 @@ The persistence layer does not need to know whether data came from a scraper, a 
 The web scraping adapters can be blocked by platform-side HTTP 403 or rate limiting responses.
 This project does not attempt to bypass platform protections, fake browser identities, or evade anti-bot controls.
 
+### File Import
+
+- CSV and XLSX uploads are supported through the local Flask interface.
+- Each uploaded file is validated and previewed before any database write happens.
+- Only valid rows are imported into the database.
+- Existing Product, Seller, and Listing records are matched through the current persistence logic, so duplicate main records are not created when the same file is imported again.
+
 ## Development Smoke Test
 
 Use the following command from the project root to run a manual end-to-end smoke test for a single Trendyol product URL:

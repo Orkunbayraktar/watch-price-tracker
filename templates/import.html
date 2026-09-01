@@ -1,0 +1,153 @@
+{% extends "base.html" %}
+
+{% block title %}Import Data | Watch Price Tracker{% endblock %}
+
+{% block content %}
+<main class="page-shell">
+	<header class="topbar">
+		<div>
+			<p class="eyebrow">Watch Price Tracker</p>
+			<h1>Import Data</h1>
+			<p class="subtitle">Upload a CSV or XLSX file, preview the normalized rows, then import only the valid records into the local database.</p>
+		</div>
+
+		<nav class="nav" aria-label="Primary navigation">
+			<a class="nav-link" href="{{ url_for('main.index') }}">Dashboard</a>
+			<a class="nav-link is-active" href="{{ url_for('main.import_data') }}">Import Data</a>
+			<span class="nav-link is-placeholder" aria-disabled="true">Products</span>
+			<span class="nav-link is-placeholder" aria-disabled="true">Sellers</span>
+		</nav>
+	</header>
+
+	<section class="card import-card">
+		<h2>Upload File</h2>
+		<p class="subtitle">Supported formats: CSV and XLSX. Maximum upload size: 10 MB.</p>
+		<p class="supporting-link"><a href="{{ url_for('static', filename='examples/watch_import_template.csv') }}">Download example CSV</a></p>
+
+		{% if page_error %}
+		<div class="page-message is-error" role="alert">{{ page_error }}</div>
+		{% endif %}
+
+		<form class="import-form" action="{{ url_for('main.import_data') }}" method="post" enctype="multipart/form-data">
+			<input type="hidden" name="action" value="preview">
+			<label class="upload-area" for="import-file">
+				<span class="upload-title">Choose a file to preview</span>
+				<span class="upload-hint">Select a local CSV or XLSX file.</span>
+				<input id="import-file" name="import_file" type="file" accept=".csv,.xlsx" required>
+			</label>
+			<button class="action-button" type="submit">Preview File</button>
+		</form>
+	</section>
+
+	{% if preview_result %}
+	<section class="card preview-card" aria-labelledby="preview-title">
+		<h2 id="preview-title">Preview / Validation</h2>
+		<p class="subtitle">File: {{ preview_result.safe_filename }}</p>
+
+		<div class="result-grid">
+			<div class="result-stat">
+				<span class="result-label">Total rows</span>
+				<strong>{{ preview_result.total_rows }}</strong>
+			</div>
+			<div class="result-stat">
+				<span class="result-label">Valid rows</span>
+				<strong>{{ preview_result.valid_rows }}</strong>
+			</div>
+			<div class="result-stat">
+				<span class="result-label">Invalid rows</span>
+				<strong>{{ preview_result.invalid_rows }}</strong>
+			</div>
+		</div>
+
+		{% if preview_result.preview_records %}
+		<h3>Preview</h3>
+		<div class="table-wrap">
+			<table class="data-table">
+				<thead>
+					<tr>
+						<th>Row</th>
+						<th>Platform</th>
+						<th>Product</th>
+						<th>Brand</th>
+						<th>Model</th>
+						<th>Seller</th>
+						<th>Price</th>
+					</tr>
+					</thead>
+				<tbody>
+					{% for record in preview_result.preview_records %}
+					<tr>
+						<td>{{ record.row_number or '-' }}</td>
+						<td>{{ record.data.platform }}</td>
+						<td>{{ record.data.product_name }}</td>
+						<td>{{ record.data.brand or '-' }}</td>
+						<td>{{ record.data.model or '-' }}</td>
+						<td>{{ record.data.seller_name or '-' }}</td>
+						<td>{{ record.data.current_price }} {{ record.data.currency or '' }}</td>
+					</tr>
+					{% endfor %}
+				</tbody>
+			</table>
+		</div>
+		{% endif %}
+
+		{% if preview_result.validation_errors %}
+		<h3>Validation Errors</h3>
+		<ul class="message-list is-warning">
+			{% for error in preview_result.validation_errors %}
+			<li>{{ error }}</li>
+			{% endfor %}
+		</ul>
+		{% endif %}
+
+		{% if preview_result.can_import %}
+		<form class="import-form import-confirmation" action="{{ url_for('main.import_data') }}" method="post">
+			<input type="hidden" name="action" value="import">
+			<input type="hidden" name="preview_token" value="{{ preview_result.import_token }}">
+			<button class="action-button" type="submit">Import Valid Rows</button>
+		</form>
+		{% endif %}
+	</section>
+	{% endif %}
+
+	{% if import_summary %}
+	<section class="card result-card" aria-labelledby="import-result-title">
+		<h2 id="import-result-title">Import Completed</h2>
+
+		<div class="result-grid">
+			<div class="result-stat">
+				<span class="result-label">Processed</span>
+				<strong>{{ import_summary.processed_rows }}</strong>
+			</div>
+			<div class="result-stat">
+				<span class="result-label">Imported</span>
+				<strong>{{ import_summary.imported_rows }}</strong>
+			</div>
+			<div class="result-stat">
+				<span class="result-label">Failed</span>
+				<strong>{{ import_summary.failed_rows }}</strong>
+			</div>
+		</div>
+
+		<div class="result-grid detail-grid">
+			<div class="result-stat"><span class="result-label">Products created</span><strong>{{ import_summary.product_created_count }}</strong></div>
+			<div class="result-stat"><span class="result-label">Products matched</span><strong>{{ import_summary.product_matched_count }}</strong></div>
+			<div class="result-stat"><span class="result-label">Sellers created</span><strong>{{ import_summary.seller_created_count }}</strong></div>
+			<div class="result-stat"><span class="result-label">Sellers matched</span><strong>{{ import_summary.seller_matched_count }}</strong></div>
+			<div class="result-stat"><span class="result-label">Listings created</span><strong>{{ import_summary.listing_created_count }}</strong></div>
+			<div class="result-stat"><span class="result-label">Listings updated</span><strong>{{ import_summary.listing_updated_count }}</strong></div>
+			<div class="result-stat"><span class="result-label">Price observations added</span><strong>{{ import_summary.price_observations_added }}</strong></div>
+		</div>
+
+		{% if import_summary.validation_errors %}
+		<h3>Import Errors</h3>
+		<ul class="message-list is-error">
+			{% for error in import_summary.validation_errors %}
+			<li>{{ error }}</li>
+			{% endfor %}
+		</ul>
+		{% endif %}
+	</section>
+	{% endif %}
+</main>
+{% endblock %}

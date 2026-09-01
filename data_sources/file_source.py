@@ -18,6 +18,11 @@ class FileDataSource(BaseDataSource):
 	"""Load normalized product rows from CSV or XLSX files."""
 
 	SUPPORTED_EXTENSIONS = {".csv", ".xlsx"}
+	REQUIRED_COLUMNS = (
+		"platform",
+		"product_name",
+		"current_price",
+	)
 	SUPPORTED_COLUMNS = (
 		"platform",
 		"product_name",
@@ -74,6 +79,7 @@ class FileDataSource(BaseDataSource):
 			reader = csv.DictReader(handle)
 			if reader.fieldnames is None:
 				raise ValueError("The CSV file does not contain a header row.")
+			self._validate_required_columns(reader.fieldnames)
 
 			rows: list[tuple[int, dict[str, Any]]] = []
 			for row_number, raw_row in enumerate(reader, start=2):
@@ -99,6 +105,7 @@ class FileDataSource(BaseDataSource):
 			headers = next(row_iterator, None)
 			if headers is None:
 				raise ValueError("The Excel file does not contain a header row.")
+			self._validate_required_columns(headers)
 
 			normalized_headers = [self._normalize_header(header) for header in headers]
 			rows: list[tuple[int, dict[str, Any]]] = []
@@ -296,3 +303,12 @@ class FileDataSource(BaseDataSource):
 	def _build_import_product_url(platform: str, external_product_id: str) -> str:
 		platform_slug = re.sub(r"[^a-z0-9._-]+", "-", platform.lower()).strip("-") or "unknown"
 		return f"import://{platform_slug}/{external_product_id}"
+
+	@classmethod
+	def _validate_required_columns(cls, headers: Iterable[Any]) -> None:
+		normalized_headers = {cls._normalize_header(header) for header in headers if header is not None}
+		missing_columns = [column for column in cls.REQUIRED_COLUMNS if column not in normalized_headers]
+		if missing_columns:
+			raise ValueError(
+				"The file is missing required columns: " + ", ".join(missing_columns)
+			)

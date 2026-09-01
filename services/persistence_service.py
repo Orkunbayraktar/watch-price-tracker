@@ -29,6 +29,9 @@ class PersistenceResult:
 	seller: Seller | None
 	listing: Listing
 	price_history: PriceHistory
+	product_created: bool
+	seller_created: bool
+	listing_created: bool
 
 
 def save_scraped_product(data: ScrapedProductData) -> PersistenceResult | None:
@@ -47,11 +50,11 @@ def save_scraped_product(data: ScrapedProductData) -> PersistenceResult | None:
 
 	session = db.session
 	try:
-		product = _find_or_create_product(data)
-		seller = _find_or_create_seller(data)
+		product, product_created = _find_or_create_product(data)
+		seller, seller_created = _find_or_create_seller(data)
 		session.flush()
 
-		listing = _find_or_create_listing(data, product, seller)
+		listing, listing_created = _find_or_create_listing(data, product, seller)
 		_update_listing(listing, data, product, seller)
 
 		price_history = PriceHistory(
@@ -71,6 +74,9 @@ def save_scraped_product(data: ScrapedProductData) -> PersistenceResult | None:
 			seller=seller,
 			listing=listing,
 			price_history=price_history,
+			product_created=product_created,
+			seller_created=seller_created,
+			listing_created=listing_created,
 		)
 	except SQLAlchemyError as error:
 		session.rollback()
@@ -78,7 +84,7 @@ def save_scraped_product(data: ScrapedProductData) -> PersistenceResult | None:
 		raise PersistenceError(f"Failed to persist scraped product data for {data.product_url}") from error
 
 
-def _find_or_create_product(data: ScrapedProductData) -> Product:
+def _find_or_create_product(data: ScrapedProductData) -> tuple[Product, bool]:
 	product = _find_product(data)
 	if product is not None:
 		product.name = data.product_name.strip()
@@ -86,7 +92,7 @@ def _find_or_create_product(data: ScrapedProductData) -> Product:
 			product.brand = data.brand.strip()
 		if product.model is None and data.model is not None:
 			product.model = data.model.strip()
-		return product
+		return product, False
 
 	product = Product(
 		brand=_clean_display_value(data.brand),
@@ -94,7 +100,7 @@ def _find_or_create_product(data: ScrapedProductData) -> Product:
 		name=data.product_name.strip(),
 	)
 	db.session.add(product)
-	return product
+	return product, True
 
 
 def _find_product(data: ScrapedProductData) -> Product | None:
@@ -135,7 +141,7 @@ def _find_product(data: ScrapedProductData) -> Product | None:
 	return None
 
 
-def _find_or_create_seller(data: ScrapedProductData) -> Seller | None:
+def _find_or_create_seller(data: ScrapedProductData) -> tuple[Seller | None, bool]:
 	platform = data.platform.strip()
 	external_seller_id = _clean_display_value(getattr(data, "external_seller_id", None))
 	if external_seller_id:
@@ -147,7 +153,7 @@ def _find_or_create_seller(data: ScrapedProductData) -> Seller | None:
 		if seller is None:
 			seller_name = _clean_display_value(data.seller_name)
 			if seller_name is None:
-				return None
+				return None, False
 			seller = Seller(
 				platform=platform,
 				external_seller_id=external_seller_id,
@@ -155,15 +161,15 @@ def _find_or_create_seller(data: ScrapedProductData) -> Seller | None:
 				rating=data.seller_rating,
 			)
 			db.session.add(seller)
-			return seller
+			return seller, True
 
 		if data.seller_rating is not None:
 			seller.rating = data.seller_rating
-		return seller
+		return seller, False
 
 	normalized_seller_name = _normalize_lookup_value(data.seller_name)
 	if normalized_seller_name is None:
-		return None
+		return None, False
 
 	seller = (
 		Seller.query.filter(
@@ -176,7 +182,7 @@ def _find_or_create_seller(data: ScrapedProductData) -> Seller | None:
 	if seller is not None:
 		if data.seller_rating is not None:
 			seller.rating = data.seller_rating
-		return seller
+		return seller, False
 
 	seller = Seller(
 		platform=platform,
@@ -184,14 +190,14 @@ def _find_or_create_seller(data: ScrapedProductData) -> Seller | None:
 		rating=data.seller_rating,
 	)
 	db.session.add(seller)
-	return seller
+	return seller, True
 
 
 def _find_or_create_listing(
 	data: ScrapedProductData,
 	product: Product,
 	seller: Seller | None,
-) -> Listing:
+) -> tuple[Listing, bool]:
 	platform = data.platform.strip()
 	external_product_id = data.external_product_id.strip()
 	product_url = data.product_url.strip()
@@ -209,11 +215,11 @@ def _find_or_create_listing(
 		).order_by(Listing.id).first()
 
 	if listing is not None:
-		return listing
+		return listing, False
 
 	exact_url_matches = query.filter(Listing.url == product_url).order_by(Listing.id).all()
 	if seller is None and len(exact_url_matches) == 1:
-		return exact_url_matches[0]
+		return exact_url_matches[0], False
 
 	listing = Listing(
 		product=product,
@@ -230,7 +236,7 @@ def _find_or_create_listing(
 		last_scraped_at=data.scraped_at,
 	)
 	db.session.add(listing)
-	return listing
+	return listing, True
 
 
 def _update_listing(
