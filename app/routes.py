@@ -6,6 +6,7 @@ from flask import Blueprint, abort, current_app, flash, redirect, render_templat
 from werkzeug.exceptions import RequestEntityTooLarge
 
 from services.dashboard_service import get_dashboard_data
+from services.data_quality_service import failure_message, get_data_quality_page
 from services.import_service import ImportServiceError, commit_import, preview_import
 from services.price_analysis_service import get_product_price_intelligence_page
 from services.product_service import list_products
@@ -19,6 +20,7 @@ from services.watchlist_service import (
 	list_watchlist_items,
 	set_watchlist_item_active,
 	update_active_watchlist_items,
+	update_watchlist_item,
 )
 
 
@@ -83,6 +85,20 @@ def scrape_run_detail(run_id: int) -> str:
 	if run_detail is None:
 		abort(404)
 	return render_template("scrape_run_detail.html", run_detail=run_detail)
+
+
+@main_bp.route("/data-quality")
+def data_quality() -> str:
+	"""Render validated operational health filters and problem-item history."""
+	quality_page = get_data_quality_page(
+		status=request.args.get("status"),
+		platform=request.args.get("platform"),
+		tracking=request.args.get("tracking"),
+		search=request.args.get("search"),
+		sort=request.args.get("sort"),
+		page=request.args.get("page", 1, type=int) or 1,
+	)
+	return render_template("data_quality.html", quality_page=quality_page)
 
 
 @main_bp.route("/sellers/<int:seller_id>")
@@ -180,7 +196,7 @@ def toggle_watchlist_item(item_id: int) -> str:
 		flash("Watchlist item activated.", "success")
 	else:
 		flash("Watchlist item paused.", "warning")
-	return redirect(url_for("main.watchlist"))
+	return _watchlist_action_redirect()
 
 
 @main_bp.route("/watchlist/<int:item_id>/delete", methods=["POST"])
@@ -190,7 +206,26 @@ def remove_watchlist_item(item_id: int) -> str:
 	if item is None:
 		abort(404)
 	flash("Watchlist item removed.", "success")
-	return redirect(url_for("main.watchlist"))
+	return _watchlist_action_redirect()
+
+
+@main_bp.route("/data-quality/<int:item_id>/retry", methods=["POST"])
+def retry_data_quality_item(item_id: int) -> str:
+	"""Retry one active watchlist item through the existing batch service."""
+	try:
+		result = update_watchlist_item(item_id)
+		item_result = result.item_results[0] if result.item_results else None
+		if item_result is not None and item_result.status == "success":
+			flash(f"Retry succeeded in run ID {result.run_id}.", "success")
+		else:
+			reason = failure_message(item_result.failure_reason if item_result is not None else None) or "Scrape attempt failed"
+			flash(f"Retry finished in run ID {result.run_id}: {reason}.", "warning")
+	except WatchlistValidationError as error:
+		flash(str(error), "warning")
+	except Exception:
+		logger.exception("Unexpected error while retrying watchlist item %s", item_id)
+		flash("An unexpected error occurred while retrying this item.", "error")
+	return _watchlist_action_redirect(default_endpoint="main.data_quality")
 
 
 @main_bp.route("/watchlist/update-active", methods=["POST"])
@@ -238,3 +273,16 @@ def _render_watchlist_page(*, update_result=None, form_values: dict[str, str] | 
 		update_result=update_result,
 		form_values=form_values or {"url": "", "label": ""},
 	)
+
+
+def _watchlist_action_redirect(*, default_endpoint: str = "main.watchlist"):
+	"""Return safely to Data Quality while preserving validated page controls."""
+	if request.form.get("return_to") != "data_quality":
+		return redirect(url_for(default_endpoint))
+	allowed_keys = {"status", "platform", "tracking", "search", "sort", "page"}
+	params = {
+		key: request.form.get(key)
+		for key in allowed_keys
+		if request.form.get(key) not in {None, ""}
+	}
+	return redirect(url_for("main.data_quality", **params))

@@ -10,6 +10,7 @@ from sqlalchemy import func
 
 from database.db import db
 from database.models import Listing, PriceHistory, Product, Seller
+from services.data_quality_service import DataQualitySummary, get_data_quality_summary
 from services.price_analysis_service import DashboardPriceIntelligence, get_dashboard_price_intelligence
 from services.scrape_run_service import ScrapeRunSummary, get_latest_scrape_run_summary, get_recent_scrape_run_summaries
 
@@ -70,6 +71,7 @@ class DashboardData:
 	price_intelligence: DashboardPriceIntelligence
 	latest_scrape_run: ScrapeRunSummary | None
 	recent_scrape_runs: list[ScrapeRunSummary]
+	data_quality: DataQualitySummary
 
 
 def get_dashboard_data(observation_limit: int = 8, listing_limit: int = 8) -> DashboardData:
@@ -166,4 +168,5 @@ def get_dashboard_data(observation_limit: int = 8, listing_limit: int = 8) -> Da
 		price_intelligence=get_dashboard_price_intelligence(),
 		latest_scrape_run=get_latest_scrape_run_summary(),
 		recent_scrape_runs=get_recent_scrape_run_summaries(),
+		data_quality=get_data_quality_summary(),
 	)

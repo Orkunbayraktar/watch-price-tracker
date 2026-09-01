@@ -12,6 +12,7 @@ from sqlalchemy import and_, or_
 from database.db import db
 from database.models import Listing, Product, Seller, WatchlistItem
 from services.batch_scraping_service import BatchScrapeResult, run_batch
+from services.data_quality_service import HealthState, get_watchlist_health_map
 from services.scraping_service import extract_external_product_id_for_url, get_platform_for_url
 from services.url_service import normalize_tracking_url
 
@@ -56,6 +57,7 @@ class WatchlistPageItem:
 	last_scrape_status: str | None
 	last_failure_reason: str | None
 	linked_listing: WatchlistLinkedListing | None
+	health: HealthState
 
 
 def list_watchlist_items() -> list[WatchlistPageItem]:
@@ -66,6 +68,7 @@ def list_watchlist_items() -> list[WatchlistPageItem]:
 		.all()
 	)
 	linked_listing_map = _load_linked_listing_map(items)
+	health_map = get_watchlist_health_map(items)
 	return [
 		WatchlistPageItem(
 			id=item.id,
@@ -80,6 +83,7 @@ def list_watchlist_items() -> list[WatchlistPageItem]:
 			last_scrape_status=item.last_scrape_status,
 			last_failure_reason=item.last_failure_reason,
 			linked_listing=linked_listing_map.get(item.id),
+			health=health_map[item.id],
 		)
 		for item in items
 	]
@@ -192,6 +196,37 @@ def update_active_watchlist_items(
 
 	return run_batch(
 		[item.url for item in active_items],
+		fetch_strategy=fetch_strategy,
+		headed=headed,
+		debug_parser=debug_parser,
+		on_item_result=handle_item_result,
+	)
+
+
+def update_watchlist_item(
+	item_id: int,
+	*,
+	fetch_strategy: str = DEFAULT_WATCHLIST_FETCH_STRATEGY,
+	headed: bool = False,
+	debug_parser: bool = False,
+) -> BatchScrapeResult:
+	"""Retry one active tracked URL through the existing batch workflow."""
+	item = get_watchlist_item(item_id)
+	if item is None:
+		raise WatchlistValidationError("The watchlist item no longer exists.")
+	if not item.is_active:
+		raise WatchlistValidationError("Activate this watchlist item before retrying it.")
+
+	def handle_item_result(_index: int, _total: int, item_result) -> None:
+		update_last_scrape_metadata(
+			item.id,
+			last_scraped_at=item_result.finished_at,
+			last_scrape_status=item_result.status,
+			last_failure_reason=None if item_result.status == "success" else item_result.failure_reason,
+		)
+
+	return run_batch(
+		[item.url],
 		fetch_strategy=fetch_strategy,
 		headed=headed,
 		debug_parser=debug_parser,

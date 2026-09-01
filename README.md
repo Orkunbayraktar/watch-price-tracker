@@ -154,6 +154,16 @@ This project does not attempt to bypass platform protections, fake browser ident
 - Hepsiburada updates stay inside the existing browser-based acquisition path. If the platform returns blocking pages or HTTP 403, the watchlist item remains tracked and the structured failure reason is stored.
 - After every attempted update, the tracked item stores `last_scraped_at`, `last_scrape_status`, and `last_failure_reason` for quick visibility in the UI.
 
+## Data Quality
+
+- The `/data-quality` page provides operational visibility for every tracked URL before any automatic scheduling is introduced. It supports validated health, platform, active/paused, search, and sort controls with server-side pagination.
+- Each watchlist item receives one mutually exclusive primary health state. The latest failed attempt maps its existing structured reason to `blocked`, `robots_denied`, `parse_failed`, `persistence_failed`, `invalid_data`, `unsupported_url`, or `other_failure`. A successful active item is `stale` when its last successful attempt exceeds `DATA_QUALITY_STALE_HOURS`; otherwise it is `healthy`. Items with no recorded outcome are `never_scraped`.
+- Summary health counts cover active tracked items only. `blocked` is reported separately from `failed`; the failed total combines parser, persistence, robots, invalid-data, unsupported-URL, and other failures. Paused items remain visible through filters but do not inflate active health totals or become stale.
+- The default stale threshold is 48 hours and can be changed through `DATA_QUALITY_STALE_HOURS`. Page size defaults to 25 through `DATA_QUALITY_PAGE_SIZE`.
+- Problem rows show the latest scrape state, a concise failure message, the original structured failure reason, the latest known persisted price when available, and up to five recent `ScrapeRunItem` attempts with links to their runs. Missing price data is shown neutrally and is never represented as zero.
+- Manual retry runs one active item through the existing Playwright watchlist/batch path, creates the normal `ScrapeRun` and `ScrapeRunItem` records, and refreshes watchlist status metadata. Platform blocks, including Hepsiburada blocking, remain recorded failures; no bypass or automatic retry is attempted.
+- Data Quality and Watchlist views bulk-load attempt and listing context in fixed query sets rather than issuing per-row queries. The main dashboard includes a compact healthy, stale, blocked, and failed summary with a link to the full page.
+
 ## Price Intelligence
 
 - Price history observations are preserved exactly as recorded; analytics separately derive real price changes by skipping consecutive duplicate prices.

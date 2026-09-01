@@ -21,5 +21,7 @@ class Config:
 	ROBOTS_TIMEOUT = 5
 	REQUEST_TIMEOUT = 10
 	PLAYWRIGHT_TIMEOUT = 20
+	DATA_QUALITY_STALE_HOURS = 48
+	DATA_QUALITY_PAGE_SIZE = 25
 	IMPORT_PREVIEW_LIMIT = 20
 	IMPORT_STATE_DIR = Path(tempfile.gettempdir()) / "watch-price-tracker-imports"

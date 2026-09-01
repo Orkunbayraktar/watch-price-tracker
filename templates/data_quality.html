@@ -1,0 +1,193 @@
+{% extends "base.html" %}
+
+{% macro action_context() %}
+<input type="hidden" name="return_to" value="data_quality">
+<input type="hidden" name="status" value="{{ quality_page.status }}">
+<input type="hidden" name="platform" value="{{ quality_page.platform }}">
+<input type="hidden" name="tracking" value="{{ quality_page.tracking }}">
+<input type="hidden" name="search" value="{{ quality_page.search }}">
+<input type="hidden" name="sort" value="{{ quality_page.sort }}">
+<input type="hidden" name="page" value="{{ quality_page.page }}">
+{% endmacro %}
+
+{% block title %}Data Quality | Watch Price Tracker{% endblock %}
+{% block page_title %}Data Quality{% endblock %}
+{% block page_description %}Operational health for tracked products, recent scrape attempts, and safe manual recovery.{% endblock %}
+{% block page_actions %}
+<a class="button button--secondary" href="{{ url_for('main.watchlist') }}">Open Watchlist</a>
+<a class="button button--ghost" href="{{ url_for('main.scrape_runs') }}">Scrape Runs</a>
+{% endblock %}
+
+{% block content %}
+<section class="metrics-grid quality-metrics" aria-label="Active watchlist health summary">
+	<article class="card metric-card metric-card--quality metric-card--healthy">
+		<p class="metric-card__label">Healthy</p>
+		<p class="metric-card__value">{{ quality_page.summary.healthy }}</p>
+	</article>
+	<article class="card metric-card metric-card--quality metric-card--stale">
+		<p class="metric-card__label">Stale</p>
+		<p class="metric-card__value">{{ quality_page.summary.stale }}</p>
+	</article>
+	<article class="card metric-card metric-card--quality metric-card--never">
+		<p class="metric-card__label">Never Scraped</p>
+		<p class="metric-card__value">{{ quality_page.summary.never_scraped }}</p>
+	</article>
+	<article class="card metric-card metric-card--quality metric-card--blocked">
+		<p class="metric-card__label">Blocked</p>
+		<p class="metric-card__value">{{ quality_page.summary.blocked }}</p>
+	</article>
+	<article class="card metric-card metric-card--quality metric-card--failed">
+		<p class="metric-card__label">Failed</p>
+		<p class="metric-card__value">{{ quality_page.summary.failed }}</p>
+	</article>
+</section>
+
+<section class="card quality-context">
+	<p><strong>{{ quality_page.summary.active_tracked }}</strong> of <strong>{{ quality_page.summary.total_tracked }}</strong> tracked items are active. Health summary counts include active items only.</p>
+	<p>Successful active items become stale after {{ quality_page.stale_hours }} hours. Blocked is separate from failed; failed combines parser, persistence, robots, invalid-data, unsupported-URL, and other failures.</p>
+</section>
+
+<section class="card filter-card">
+	<form class="filter-form quality-filter-form" method="get" action="{{ url_for('main.data_quality') }}">
+		<div class="form-field form-field--wide">
+			<label for="quality-search">Search</label>
+			<input id="quality-search" name="search" type="search" value="{{ quality_page.search }}" placeholder="Label or product URL">
+		</div>
+		<div class="form-field">
+			<label for="quality-status">Health</label>
+			<select id="quality-status" name="status">
+				{% for value, label in quality_page.status_options %}
+				<option value="{{ value }}"{% if quality_page.status == value %} selected{% endif %}>{{ label }}</option>
+				{% endfor %}
+			</select>
+		</div>
+		<div class="form-field">
+			<label for="quality-platform">Platform</label>
+			<select id="quality-platform" name="platform">
+				{% for value, label in quality_page.platform_options %}
+				<option value="{{ value }}"{% if quality_page.platform == value %} selected{% endif %}>{{ label }}</option>
+				{% endfor %}
+			</select>
+		</div>
+		<div class="form-field">
+			<label for="quality-tracking">Watchlist Status</label>
+			<select id="quality-tracking" name="tracking">
+				{% for value, label in quality_page.tracking_options %}
+				<option value="{{ value }}"{% if quality_page.tracking == value %} selected{% endif %}>{{ label }}</option>
+				{% endfor %}
+			</select>
+		</div>
+		<div class="form-field">
+			<label for="quality-sort">Sort</label>
+			<select id="quality-sort" name="sort">
+				{% for value, label in quality_page.sort_options %}
+				<option value="{{ value }}"{% if quality_page.sort == value %} selected{% endif %}>{{ label }}</option>
+				{% endfor %}
+			</select>
+		</div>
+		<div class="form-actions">
+			<button class="button button--primary" type="submit">Apply Filters</button>
+			<a class="button button--ghost" href="{{ url_for('main.data_quality') }}">Reset</a>
+		</div>
+	</form>
+</section>
+
+<section class="card data-section">
+	<div class="section-heading">
+		<div>
+			<h2>Problem Items</h2>
+			<p class="section-copy">{{ quality_page.total_items }} matching tracked item{% if quality_page.total_items != 1 %}s{% endif %}, with up to five recent attempts per row.</p>
+		</div>
+	</div>
+
+	{% if quality_page.items %}
+	<div class="table-wrap">
+		<table class="data-table quality-table">
+			<thead>
+				<tr>
+					<th scope="col">Product / Label</th>
+					<th scope="col">Platform</th>
+					<th scope="col">URL</th>
+					<th scope="col">Watchlist Status</th>
+					<th scope="col">Last Scrape</th>
+					<th scope="col">Last Result</th>
+					<th scope="col">Failure Reason</th>
+					<th scope="col">Latest Known Price</th>
+					<th scope="col">Action</th>
+				</tr>
+			</thead>
+			<tbody>
+				{% for item in quality_page.items %}
+				<tr>
+					<td>
+						<div class="watchlist-primary">
+							<strong>{{ item.primary_name }}</strong>
+							{% if item.product_id and item.display_name and item.product_name %}
+							<a class="table-link" href="{{ url_for('main.product_detail', product_id=item.product_id) }}">{{ item.product_name }}</a>
+							{% endif %}
+							{% if item.recent_attempts %}
+							<details class="attempt-history">
+								<summary>Recent attempts ({{ item.recent_attempts|length }})</summary>
+								<ul class="attempt-list">
+									{% for attempt in item.recent_attempts %}
+									<li>
+										<a class="table-link" href="{{ url_for('main.scrape_run_detail', run_id=attempt.run_id) }}">Run {{ attempt.run_id }}</a>
+										<span>{{ attempt.attempted_at|format_datetime }} | {{ attempt.status|replace('_', ' ')|title }}{% if attempt.failure_reason %} | {{ attempt.failure_reason }}{% endif %}</span>
+									</li>
+									{% endfor %}
+								</ul>
+							</details>
+							{% endif %}
+						</div>
+					</td>
+					<td><span class="{{ item.platform|platform_badge_class }}">{{ item.platform|platform_label }}</span></td>
+					<td><a class="watchlist-url" href="{{ item.url }}" target="_blank" rel="noopener noreferrer">{{ item.url }}</a></td>
+					<td><span class="tracking-status-badge tracking-status-badge--{{ 'active' if item.is_active else 'paused' }}">{{ 'Active' if item.is_active else 'Paused' }}</span></td>
+					<td>{{ item.last_scraped_at|format_datetime if item.last_scraped_at else 'Not scraped yet' }}</td>
+					<td><span class="health-badge {{ item.health.css_class }}"><span class="health-badge__dot" aria-hidden="true"></span>{{ item.health.label }}</span></td>
+					<td>
+						{% if item.health.failure_message %}
+						<strong>{{ item.health.failure_message }}</strong>
+						{% if item.last_failure_reason %}<p class="table-meta"><code>{{ item.last_failure_reason }}</code></p>{% endif %}
+						{% else %}
+						<span class="table-meta">Not applicable</span>
+						{% endif %}
+					</td>
+					<td>{% if item.latest_price is not none %}{{ item.latest_price|format_price(item.currency or 'TRY') }}{% else %}<span class="table-meta">No price data</span>{% endif %}</td>
+					<td>
+						<div class="table-actions table-actions--stacked">
+							<a class="button button--ghost" href="{{ url_for('main.watchlist') }}#watchlist-item-{{ item.id }}">Open Watchlist Item</a>
+							<form method="post" action="{{ url_for('main.retry_data_quality_item', item_id=item.id) }}">
+								{{ action_context() }}
+								<button class="button button--primary" type="submit"{% if not item.is_active %} disabled title="Activate this item before retrying"{% endif %}>Retry</button>
+							</form>
+							<form method="post" action="{{ url_for('main.toggle_watchlist_item', item_id=item.id) }}">
+								{{ action_context() }}
+								<button class="button button--secondary" type="submit">{{ 'Pause' if item.is_active else 'Activate' }}</button>
+							</form>
+							<form method="post" action="{{ url_for('main.remove_watchlist_item', item_id=item.id) }}">
+								{{ action_context() }}
+								<button class="button button--ghost" type="submit">Remove</button>
+							</form>
+						</div>
+					</td>
+				</tr>
+				{% endfor %}
+			</tbody>
+		</table>
+	</div>
+
+	<nav class="pagination" aria-label="Data quality pagination">
+		<div>{% if quality_page.has_previous %}<a class="button button--ghost" href="?{{ merge_query_params(page=quality_page.page - 1) }}">Previous</a>{% endif %}</div>
+		<p class="pagination__status">Page {{ quality_page.page }} of {{ quality_page.total_pages }}</p>
+		<div>{% if quality_page.has_next %}<a class="button button--ghost" href="?{{ merge_query_params(page=quality_page.page + 1) }}">Next</a>{% endif %}</div>
+	</nav>
+	{% else %}
+	<div class="empty-state">
+		<h3>No tracked items match these filters.</h3>
+		<p>Adjust the health, platform, tracking status, or search filters to inspect other items.</p>
+		<a class="button button--secondary" href="{{ url_for('main.data_quality') }}">Clear Filters</a>
+	</div>
+	{% endif %}
+</section>
+{% endblock %}

@@ -28,6 +28,22 @@
 	</article>
 </section>
 
+<section class="card data-section quality-dashboard-card">
+	<div class="section-heading">
+		<div>
+			<h2>Data Quality</h2>
+			<p class="section-copy">Active watchlist health and manual recovery visibility.</p>
+		</div>
+		<a class="button button--secondary" href="{{ url_for('main.data_quality') }}">View Data Quality</a>
+	</div>
+	<div class="quality-dashboard-grid">
+		<div><span class="health-badge health-badge--healthy"><span class="health-badge__dot" aria-hidden="true"></span>Healthy</span><strong>{{ dashboard.data_quality.healthy }}</strong></div>
+		<div><span class="health-badge health-badge--stale"><span class="health-badge__dot" aria-hidden="true"></span>Stale</span><strong>{{ dashboard.data_quality.stale }}</strong></div>
+		<div><span class="health-badge health-badge--blocked"><span class="health-badge__dot" aria-hidden="true"></span>Blocked</span><strong>{{ dashboard.data_quality.blocked }}</strong></div>
+		<div><span class="health-badge health-badge--failed"><span class="health-badge__dot" aria-hidden="true"></span>Failed</span><strong>{{ dashboard.data_quality.failed }}</strong></div>
+	</div>
+</section>
+
 <section class="layout-grid layout-grid--dashboard">
 	<article class="card data-section data-section--wide">
 		<div class="section-heading">

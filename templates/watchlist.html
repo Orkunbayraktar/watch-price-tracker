@@ -86,6 +86,7 @@
 			<thead>
 				<tr>
 					<th scope="col">Status</th>
+					<th scope="col">Health</th>
 					<th scope="col">Platform</th>
 					<th scope="col">Label / Product</th>
 					<th scope="col">URL</th>
@@ -96,12 +97,13 @@
 			</thead>
 			<tbody>
 				{% for item in watchlist_items %}
-				<tr>
+				<tr id="watchlist-item-{{ item.id }}">
 					<td>
 						<span class="tracking-status-badge tracking-status-badge--{{ 'active' if item.is_active else 'paused' }}">
 							{{ 'Active' if item.is_active else 'Paused' }}
 						</span>
 					</td>
+					<td><span class="health-badge {{ item.health.css_class }}"><span class="health-badge__dot" aria-hidden="true"></span>{{ item.health.label }}</span></td>
 					<td><span class="{{ item.platform|platform_badge_class }}">{{ item.platform|platform_label }}</span></td>
 					<td>
 						<div class="watchlist-primary">
