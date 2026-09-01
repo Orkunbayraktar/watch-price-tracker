@@ -77,6 +77,23 @@ Activate it on Windows PowerShell:
 
 This project is an actively developed university internship project.
 The current implementation includes a Trendyol single-product scraper proof of concept, not a full marketplace scraper.
+The current implementation also includes a Hepsiburada single-product scraper proof of concept, not a full marketplace scraper.
+
+## Development Smoke Test
+
+Use the following command from the project root to run a manual end-to-end smoke test for a single Trendyol product URL:
+
+```bash
+python scripts/smoke_test_trendyol.py "<TRENDYOL_PRODUCT_URL>"
+```
+
+Use the following command from the project root to run the equivalent Hepsiburada smoke test:
+
+```bash
+python scripts/smoke_test_hepsiburada.py "<HEPSIBURADA_PRODUCT_URL>"
+```
+
+This command is intended only for development and debugging. It validates the scraper, robots.txt checks, persistence flow, and SQLite storage for one real product URL.
 
 ## Important Note
 

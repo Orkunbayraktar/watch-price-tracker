@@ -166,7 +166,9 @@ def test_missing_optional_fields_return_none() -> None:
 
 def test_no_http_request_is_sent_when_robots_denies_access() -> None:
 	robots_manager = Mock()
-	robots_manager.can_fetch.return_value = False
+	parser = Mock()
+	parser.can_fetch.return_value = False
+	robots_manager.load_rules.return_value = parser
 	session = requests.Session()
 	session.get = Mock()
 	scraper = TrendyolScraper(robots_manager=robots_manager, session=session)
@@ -174,19 +176,43 @@ def test_no_http_request_is_sent_when_robots_denies_access() -> None:
 	result = scraper.scrape_product("https://www.trendyol.com/casio/g-shock-ga-2100-p-33139591")
 
 	assert result is None
+	assert scraper.last_failure_reason == "robots_denied"
 	session.get.assert_not_called()
 
 
-def test_http_error_is_handled_without_crashing() -> None:
+def test_http_403_becomes_http_forbidden() -> None:
 	robots_manager = Mock()
-	robots_manager.can_fetch.return_value = True
+	parser = Mock()
+	parser.can_fetch.return_value = True
+	robots_manager.load_rules.return_value = parser
 	session = requests.Session()
-	session.get = Mock(return_value=FakeResponse("", requests.HTTPError("403 Client Error")))
+	http_error = requests.HTTPError("403 Client Error")
+	http_error.response = Mock(status_code=403)
+	session.get = Mock(return_value=FakeResponse("", http_error))
 	scraper = TrendyolScraper(robots_manager=robots_manager, session=session)
 
 	result = scraper.scrape_product("https://www.trendyol.com/casio/g-shock-ga-2100-p-33139591")
 
 	assert result is None
+	assert scraper.last_failure_reason == "http_forbidden"
+	session.get.assert_called_once()
+
+
+def test_http_429_becomes_rate_limited() -> None:
+	robots_manager = Mock()
+	parser = Mock()
+	parser.can_fetch.return_value = True
+	robots_manager.load_rules.return_value = parser
+	session = requests.Session()
+	http_error = requests.HTTPError("429 Client Error")
+	http_error.response = Mock(status_code=429)
+	session.get = Mock(return_value=FakeResponse("", http_error))
+	scraper = TrendyolScraper(robots_manager=robots_manager, session=session)
+
+	result = scraper.scrape_product("https://www.trendyol.com/casio/g-shock-ga-2100-p-33139591")
+
+	assert result is None
+	assert scraper.last_failure_reason == "rate_limited"
 	session.get.assert_called_once()
 
 
@@ -199,6 +225,7 @@ def test_parse_returns_none_when_product_name_is_missing() -> None:
 	)
 
 	assert parsed is None
+	assert scraper.last_failure_reason == "invalid_data"
 
 
 def test_parse_returns_none_when_current_price_is_missing() -> None:
@@ -210,6 +237,7 @@ def test_parse_returns_none_when_current_price_is_missing() -> None:
 	)
 
 	assert parsed is None
+	assert scraper.last_failure_reason == "invalid_data"
 
 
 def test_parse_returns_none_when_external_product_id_is_missing() -> None:
@@ -221,6 +249,7 @@ def test_parse_returns_none_when_external_product_id_is_missing() -> None:
 	)
 
 	assert parsed is None
+	assert scraper.last_failure_reason == "invalid_data"
 
 
 def test_parser_does_not_access_database() -> None:

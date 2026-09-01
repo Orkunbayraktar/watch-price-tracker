@@ -2,26 +2,24 @@
 
 from unittest.mock import Mock, patch
 import unittest
-from urllib.error import URLError
+
+import requests
 
 from scrapers.base_scraper import BaseScraper
+from scrapers.hepsiburada_scraper import HepsiburadaScraper
 from scrapers.robots_manager import RobotsManager
 
 
-class FakeHTTPResponse:
-	"""Simple context-manager response for mocked urlopen calls."""
+class FakeResponse:
+	"""Simple response object for mocked requests.get calls."""
 
-	def __init__(self, payload: str) -> None:
-		self.payload = payload.encode("utf-8")
+	def __init__(self, text: str, status_error: Exception | None = None) -> None:
+		self.text = text
+		self._status_error = status_error
 
-	def read(self) -> bytes:
-		return self.payload
-
-	def __enter__(self) -> "FakeHTTPResponse":
-		return self
-
-	def __exit__(self, exc_type, exc_val, exc_tb) -> None:
-		return None
+	def raise_for_status(self) -> None:
+		if self._status_error is not None:
+			raise self._status_error
 
 
 class RobotsManagerTests(unittest.TestCase):
@@ -34,27 +32,32 @@ class RobotsManagerTests(unittest.TestCase):
 
 		self.assertEqual(robots_url, "https://shop.example.com/robots.txt")
 
-	@patch("scrapers.robots_manager.urlopen")
-	def test_can_fetch_returns_true_for_allowed_url(self, mock_urlopen: Mock) -> None:
-		mock_urlopen.return_value = FakeHTTPResponse("User-agent: *\nDisallow: /private")
+	@patch("scrapers.robots_manager.requests.get")
+	def test_robots_txt_is_fetched_and_allow_rule_returns_true(self, mock_get: Mock) -> None:
+		mock_get.return_value = FakeResponse("User-agent: *\nDisallow: /private")
 		manager = RobotsManager()
 
 		is_allowed = manager.can_fetch("https://example.com/products/watch-1")
 
 		self.assertTrue(is_allowed)
+		mock_get.assert_called_once_with(
+			"https://example.com/robots.txt",
+			headers={"User-Agent": "WatchPriceTracker/1.0"},
+			timeout=5,
+		)
 
-	@patch("scrapers.robots_manager.urlopen")
-	def test_can_fetch_returns_false_for_disallowed_url(self, mock_urlopen: Mock) -> None:
-		mock_urlopen.return_value = FakeHTTPResponse("User-agent: *\nDisallow: /private")
+	@patch("scrapers.robots_manager.requests.get")
+	def test_downloaded_robots_text_is_parsed_and_disallow_rule_returns_false(self, mock_get: Mock) -> None:
+		mock_get.return_value = FakeResponse("User-agent: *\nDisallow: /private")
 		manager = RobotsManager()
 
 		is_allowed = manager.can_fetch("https://example.com/private/watch-1")
 
 		self.assertFalse(is_allowed)
 
-	@patch("scrapers.robots_manager.urlopen")
-	def test_load_rules_uses_cache_for_same_domain(self, mock_urlopen: Mock) -> None:
-		mock_urlopen.return_value = FakeHTTPResponse("User-agent: *\nDisallow:")
+	@patch("scrapers.robots_manager.requests.get")
+	def test_load_rules_uses_cache_for_same_domain(self, mock_get: Mock) -> None:
+		mock_get.return_value = FakeResponse("User-agent: *\nDisallow:")
 		manager = RobotsManager()
 
 		first_check = manager.can_fetch("https://example.com/products/watch-1")
@@ -62,11 +65,42 @@ class RobotsManagerTests(unittest.TestCase):
 
 		self.assertTrue(first_check)
 		self.assertTrue(second_check)
-		self.assertEqual(mock_urlopen.call_count, 1)
+		self.assertEqual(mock_get.call_count, 1)
 
-	@patch("scrapers.robots_manager.urlopen")
-	def test_can_fetch_is_fail_safe_when_robots_cannot_be_loaded(self, mock_urlopen: Mock) -> None:
-		mock_urlopen.side_effect = URLError("network unavailable")
+	@patch("scrapers.robots_manager.requests.get")
+	def test_robots_http_403_is_fail_safe(self, mock_get: Mock) -> None:
+		http_error = requests.HTTPError("403 Client Error")
+		http_error.response = Mock(status_code=403)
+		mock_get.return_value = FakeResponse("forbidden", http_error)
+		manager = RobotsManager()
+
+		is_allowed = manager.can_fetch("https://example.com/products/watch-1")
+
+		self.assertFalse(is_allowed)
+
+	@patch("scrapers.robots_manager.requests.get")
+	def test_robots_http_429_is_fail_safe(self, mock_get: Mock) -> None:
+		http_error = requests.HTTPError("429 Client Error")
+		http_error.response = Mock(status_code=429)
+		mock_get.return_value = FakeResponse("rate limited", http_error)
+		manager = RobotsManager()
+
+		is_allowed = manager.can_fetch("https://example.com/products/watch-1")
+
+		self.assertFalse(is_allowed)
+
+	@patch("scrapers.robots_manager.requests.get")
+	def test_timeout_is_fail_safe(self, mock_get: Mock) -> None:
+		mock_get.side_effect = requests.Timeout("timed out")
+		manager = RobotsManager()
+
+		is_allowed = manager.can_fetch("https://example.com/products/watch-1")
+
+		self.assertFalse(is_allowed)
+
+	@patch("scrapers.robots_manager.requests.get")
+	def test_network_error_is_fail_safe(self, mock_get: Mock) -> None:
+		mock_get.side_effect = requests.RequestException("network unavailable")
 		manager = RobotsManager()
 
 		is_allowed = manager.can_fetch("https://example.com/products/watch-1")
@@ -90,6 +124,33 @@ class RobotsManagerTests(unittest.TestCase):
 			"WatchPriceTracker-Test/2.0",
 			"https://example.com/products/watch-1",
 		)
+
+	@patch("scrapers.robots_manager.requests.get")
+	def test_custom_configured_user_agent_is_used_for_robots_request(self, mock_get: Mock) -> None:
+		mock_get.return_value = FakeResponse("User-agent: *\nDisallow:")
+		manager = RobotsManager(user_agent="WatchPriceTracker-Test/2.0", timeout=9)
+
+		manager.load_rules("https://example.com/products/watch-1")
+
+		mock_get.assert_called_once_with(
+			"https://example.com/robots.txt",
+			headers={"User-Agent": "WatchPriceTracker-Test/2.0"},
+			timeout=9,
+		)
+
+	@patch("scrapers.robots_manager.requests.get")
+	def test_product_request_is_never_sent_if_robots_loading_fails(self, mock_get: Mock) -> None:
+		http_error = requests.HTTPError("403 Client Error")
+		http_error.response = Mock(status_code=403)
+		mock_get.return_value = FakeResponse("forbidden", http_error)
+		product_session = Mock()
+		scraper = HepsiburadaScraper(session=product_session)
+
+		result = scraper.scrape_product("https://www.hepsiburada.com/casio-retro-kol-saati-a159wa-n1df-pm-sacsa159wan1df")
+
+		self.assertIsNone(result)
+		self.assertEqual(scraper.last_failure_reason, "robots_load_failed")
+		product_session.get.assert_not_called()
 
 	def test_base_scraper_uses_robots_manager_for_access_control(self) -> None:
 		robots_manager = Mock()

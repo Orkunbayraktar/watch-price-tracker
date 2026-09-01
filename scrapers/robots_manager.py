@@ -7,12 +7,11 @@ parsed with enough confidence, URL access is denied by default.
 from __future__ import annotations
 
 import logging
-from urllib.error import URLError
 from urllib.parse import urlparse, urlunparse
-from urllib.request import urlopen
 from urllib.robotparser import RobotFileParser
 
 from config.settings import Config
+import requests
 
 
 logger = logging.getLogger(__name__)
@@ -66,10 +65,17 @@ class RobotsManager:
 		parser.set_url(robots_url)
 
 		try:
-			with urlopen(robots_url, timeout=self.timeout) as response:
-				content = response.read().decode("utf-8", errors="ignore")
+			response = requests.get(
+				robots_url,
+				headers={"User-Agent": self.user_agent},
+				timeout=self.timeout,
+			)
+			response.raise_for_status()
+			content = response.text
+			if not content or not content.strip():
+				raise ValueError("robots.txt response was empty")
 			parser.parse(content.splitlines())
-		except (URLError, OSError, ValueError) as error:
+		except (requests.RequestException, OSError, ValueError) as error:
 			logger.warning("Failed to load robots.txt from %s: %s", robots_url, error)
 			self._cache[robots_url] = None
 			return None

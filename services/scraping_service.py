@@ -4,7 +4,9 @@ from __future__ import annotations
 
 import logging
 
+from scrapers.hepsiburada_scraper import HepsiburadaScraper
 from scrapers.models import ScrapedProductData
+from scrapers.product_page_scraper import ProductPageScraper
 from scrapers.trendyol_scraper import TrendyolScraper
 from services.persistence_service import PersistenceError, PersistenceResult, save_scraped_product
 
@@ -12,9 +14,28 @@ from services.persistence_service import PersistenceError, PersistenceResult, sa
 logger = logging.getLogger(__name__)
 
 
-def scrape_product(url: str, scraper: TrendyolScraper | None = None) -> ScrapedProductData | None:
+SCRAPER_CLASSES: tuple[type[ProductPageScraper], ...] = (
+	TrendyolScraper,
+	HepsiburadaScraper,
+)
+
+
+def create_scraper_for_url(url: str) -> ProductPageScraper | None:
+	"""Create the first scraper that explicitly supports the URL."""
+	for scraper_class in SCRAPER_CLASSES:
+		if scraper_class.is_supported_url(url):
+			return scraper_class()
+
+	return None
+
+
+def scrape_product(url: str, scraper: ProductPageScraper | None = None) -> ScrapedProductData | None:
 	"""Scrape a single supported product URL and return normalized data."""
-	working_scraper = scraper or TrendyolScraper()
+	working_scraper = scraper or create_scraper_for_url(url)
+	if working_scraper is None:
+		logger.warning("No scraper available for URL: %s", url)
+		return None
+
 	if not working_scraper.is_supported_url(url):
 		logger.warning("No scraper available for URL: %s", url)
 		return None
@@ -24,7 +45,7 @@ def scrape_product(url: str, scraper: TrendyolScraper | None = None) -> ScrapedP
 
 def scrape_and_save_product(
 	url: str,
-	scraper: TrendyolScraper | None = None,
+	scraper: ProductPageScraper | None = None,
 ) -> PersistenceResult | None:
 	"""Scrape a single supported product URL and persist the normalized result."""
 	scraped_data = scrape_product(url, scraper=scraper)

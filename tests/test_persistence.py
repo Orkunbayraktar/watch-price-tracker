@@ -170,6 +170,21 @@ class PersistenceServiceTests(unittest.TestCase):
 		self.assertEqual(Listing.query.count(), 0)
 		self.assertEqual(PriceHistory.query.count(), 0)
 
+	def test_scrape_and_save_product_does_not_write_when_scraper_fails_with_structured_reason(self) -> None:
+		scraper = Mock()
+		scraper.is_supported_url.return_value = True
+		scraper.scrape_product.return_value = None
+		scraper.last_failure_reason = "http_forbidden"
+		scraper.last_failure_details = "The server returned HTTP 403 and blocked the request."
+
+		result = scrape_and_save_product("https://www.trendyol.com/casio/g-shock-ga-2100-p-33139591", scraper=scraper)
+
+		self.assertIsNone(result)
+		self.assertEqual(Product.query.count(), 0)
+		self.assertEqual(Seller.query.count(), 0)
+		self.assertEqual(Listing.query.count(), 0)
+		self.assertEqual(PriceHistory.query.count(), 0)
+
 	def test_invalid_scraped_data_does_not_change_database(self) -> None:
 		result = save_scraped_product(self._make_data(current_price=None))
 
