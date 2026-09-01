@@ -44,6 +44,7 @@ The goal of this project is to monitor selected watch brands and models on Trend
 watch-price-tracker/
 ├── app/
 ├── config/
+├── data_sources/
 ├── data/
 │   ├── exports/
 │   └── raw/
@@ -78,6 +79,25 @@ Activate it on Windows PowerShell:
 This project is an actively developed university internship project.
 The current implementation includes a Trendyol single-product scraper proof of concept, not a full marketplace scraper.
 The current implementation also includes a Hepsiburada single-product scraper proof of concept, not a full marketplace scraper.
+
+## Data Sources
+
+Current data sources:
+
+- Web scraping adapters for Trendyol and Hepsiburada product pages
+- CSV import into the shared normalized product format
+- Excel `.xlsx` import into the shared normalized product format
+
+Planned data sources:
+
+- Authorized marketplace APIs
+- Additional approved institutional data feeds
+
+All current data sources normalize incoming records into the same `ScrapedProductData` structure before persistence.
+The persistence layer does not need to know whether data came from a scraper, a CSV file, or an Excel file.
+
+The web scraping adapters can be blocked by platform-side HTTP 403 or rate limiting responses.
+This project does not attempt to bypass platform protections, fake browser identities, or evade anti-bot controls.
 
 ## Development Smoke Test
 
