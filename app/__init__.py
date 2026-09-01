@@ -4,6 +4,7 @@ from pathlib import Path
 
 from flask import Flask
 
+from app.template_helpers import register_template_helpers
 from config.settings import Config
 from database.db import init_db
 
@@ -22,6 +23,7 @@ def create_app(config_overrides: dict | None = None) -> Flask:
 	if config_overrides:
 		app.config.update(config_overrides)
 
+	register_template_helpers(app)
 	init_db(app)
 
 	from app.routes import main_bp

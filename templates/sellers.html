@@ -1,5 +1,100 @@
 {% extends "base.html" %}
 
+{% block title %}Sellers | Watch Price Tracker{% endblock %}
+{% block page_title %}Sellers{% endblock %}
+{% block page_description %}Monitor seller coverage, price levels, and update activity across supported marketplaces.{% endblock %}
+{% block page_actions %}
+<a class="button button--secondary" href="{{ url_for('main.import_data') }}">Import Data</a>
+{% endblock %}
+
 {% block content %}
-<h1>Sellers</h1>
+<section class="card filter-card">
+	<form class="filter-form" method="get" action="{{ url_for('main.sellers') }}">
+		<div class="form-field form-field--wide">
+			<label for="seller-search">Search</label>
+			<input id="seller-search" type="search" name="q" value="{{ seller_result.filters.q }}" placeholder="Search seller name">
+		</div>
+		<div class="form-field">
+			<label for="seller-platform">Platform</label>
+			<select id="seller-platform" name="platform">
+				<option value="">All platforms</option>
+				{% for platform in seller_result.available_platforms %}
+				<option value="{{ platform }}" {% if seller_result.filters.platform == platform %}selected{% endif %}>{{ platform|platform_label }}</option>
+				{% endfor %}
+			</select>
+		</div>
+		<div class="form-actions">
+			<button class="button button--primary" type="submit">Apply Filters</button>
+			<a class="button button--ghost" href="{{ url_for('main.sellers') }}">Reset</a>
+		</div>
+	</form>
+</section>
+
+<section class="card data-section">
+	<div class="section-heading">
+		<div>
+			<h2>Seller Directory</h2>
+			<p class="section-copy">{{ seller_result.total_count }} sellers found{% if seller_result.filters.has_filters %} for the current filters{% endif %}.</p>
+		</div>
+	</div>
+
+	{% if seller_result.items %}
+	<div class="table-wrap">
+		<table class="data-table">
+			<thead>
+				<tr>
+					<th scope="col">Seller</th>
+					<th scope="col">Platform</th>
+					<th scope="col">Rating</th>
+					<th scope="col">Listings</th>
+					<th scope="col">Lowest Price</th>
+					<th scope="col">Average Price</th>
+					<th scope="col">Last Activity</th>
+				</tr>
+			</thead>
+			<tbody>
+				{% for item in seller_result.items %}
+				<tr>
+					<td><a class="table-link" href="{{ url_for('main.seller_detail', seller_id=item.seller_id) }}">{{ item.name }}</a></td>
+					<td><span class="{{ item.platform|platform_badge_class }}">{{ item.platform|platform_label }}</span></td>
+					<td>{{ item.rating if item.rating is not none else 'Not available' }}</td>
+					<td>{{ item.listing_count }}</td>
+					<td>{{ item.lowest_current_price|format_price }}</td>
+					<td>{{ item.average_current_price|format_price }}</td>
+					<td>{{ item.last_activity|format_datetime }}</td>
+				</tr>
+				{% endfor %}
+			</tbody>
+		</table>
+	</div>
+	{% else %}
+	<div class="empty-state">
+		{% if seller_result.filters.has_filters %}
+		<h3>No sellers matched the current filters.</h3>
+		<p>Try widening the search or clearing the platform filter.</p>
+		<a class="button button--ghost" href="{{ url_for('main.sellers') }}">Reset Filters</a>
+		{% else %}
+		<h3>No seller data yet.</h3>
+		<p>Import a CSV or Excel file to generate seller analytics.</p>
+		<a class="button button--secondary" href="{{ url_for('main.import_data') }}">Import Data</a>
+		{% endif %}
+	</div>
+	{% endif %}
+
+	{% if seller_result.total_pages > 1 %}
+	<nav class="pagination" aria-label="Sellers pagination">
+		{% if seller_result.page > 1 %}
+		<a class="button button--ghost" href="{{ url_for('main.sellers') }}?{{ merge_query_params(page=seller_result.page - 1) }}">Previous</a>
+		{% else %}
+		<span class="button button--ghost is-disabled" aria-disabled="true">Previous</span>
+		{% endif %}
+		<span class="pagination__status">Page {{ seller_result.page }} of {{ seller_result.total_pages }}</span>
+		{% if seller_result.page < seller_result.total_pages %}
+		<a class="button button--ghost" href="{{ url_for('main.sellers') }}?{{ merge_query_params(page=seller_result.page + 1) }}">Next</a>
+		{% else %}
+		<span class="button button--ghost is-disabled" aria-disabled="true">Next</span>
+		{% endif %}
+	</nav>
+	{% endif %}
+</section>
 {% endblock %}

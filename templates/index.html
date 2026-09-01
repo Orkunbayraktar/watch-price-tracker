@@ -1,27 +1,145 @@
 {% extends "base.html" %}
 
-{% block title %}Watch Price Tracker{% endblock %}
+{% block title %}Dashboard | Watch Price Tracker{% endblock %}
+{% block page_title %}Dashboard{% endblock %}
+{% block page_description %}Real database-backed analytics for imported and scraped marketplace watch listings.{% endblock %}
+{% block page_actions %}
+<a class="button button--secondary" href="{{ url_for('main.import_data') }}">Import Data</a>
+{% endblock %}
 
 {% block content %}
-<main class="page-shell">
-	<header class="topbar">
-		<div>
-			<p class="eyebrow">Watch Price Tracker</p>
-			<h1>Watch Price Tracker</h1>
-			<p class="subtitle">Trendyol and Hepsiburada watch price monitoring dashboard.</p>
+<section class="metrics-grid" aria-label="Summary metrics">
+	<article class="card metric-card">
+		<p class="metric-card__label">Total Products</p>
+		<p class="metric-card__value">{{ dashboard.metrics.total_products }}</p>
+	</article>
+	<article class="card metric-card">
+		<p class="metric-card__label">Total Sellers</p>
+		<p class="metric-card__value">{{ dashboard.metrics.total_sellers }}</p>
+	</article>
+	<article class="card metric-card">
+		<p class="metric-card__label">Active Listings</p>
+		<p class="metric-card__value">{{ dashboard.metrics.active_listings }}</p>
+	</article>
+	<article class="card metric-card">
+		<p class="metric-card__label">Price Observations</p>
+		<p class="metric-card__value">{{ dashboard.metrics.price_observations }}</p>
+	</article>
+</section>
+
+<section class="layout-grid layout-grid--dashboard">
+	<article class="card data-section">
+		<div class="section-heading">
+			<div>
+				<h2>Recent Price Observations</h2>
+				<p class="section-copy">Latest historical price snapshots recorded in the database.</p>
+			</div>
 		</div>
 
-		<nav class="nav" aria-label="Primary navigation">
-			<a class="nav-link is-active" href="{{ url_for('main.index') }}">Dashboard</a>
-			<a class="nav-link" href="{{ url_for('main.import_data') }}">Import Data</a>
-			<span class="nav-link is-placeholder" aria-disabled="true">Products</span>
-			<span class="nav-link is-placeholder" aria-disabled="true">Sellers</span>
-		</nav>
-	</header>
+		{% if dashboard.recent_price_observations %}
+		<div class="table-wrap">
+			<table class="data-table">
+				<thead>
+					<tr>
+						<th scope="col">Product</th>
+						<th scope="col">Platform</th>
+						<th scope="col">Seller</th>
+						<th scope="col">Price</th>
+						<th scope="col">Recorded</th>
+					</tr>
+				</thead>
+				<tbody>
+					{% for item in dashboard.recent_price_observations %}
+					<tr>
+						<td><a class="table-link" href="{{ url_for('main.product_detail', product_id=item.product_id) }}">{{ item.product_name }}</a></td>
+						<td><span class="{{ item.platform|platform_badge_class }}">{{ item.platform|platform_label }}</span></td>
+						<td>{{ item.seller_name or 'Not available' }}</td>
+						<td>{{ item.price|format_price(item.currency) }}</td>
+						<td>{{ item.recorded_at|format_datetime }}</td>
+					</tr>
+					{% endfor %}
+				</tbody>
+			</table>
+		</div>
+		{% else %}
+		<div class="empty-state">
+			<h3>No price observations yet.</h3>
+			<p>No product data yet. Import a CSV or Excel file to start tracking prices.</p>
+			<a class="button button--secondary" href="{{ url_for('main.import_data') }}">Import Data</a>
+		</div>
+		{% endif %}
+	</article>
 
-	<section class="card status-card" aria-labelledby="development-status-title">
-		<h2 id="development-status-title">Development Status</h2>
-		<p>This project is currently under active development. Core monitoring features will be added in later stages.</p>
-	</section>
-</main>
+	<article class="card data-section">
+		<div class="section-heading">
+			<div>
+				<h2>Marketplace Breakdown</h2>
+				<p class="section-copy">Listing volume grouped by source platform.</p>
+			</div>
+		</div>
+
+		{% if dashboard.marketplace_breakdown %}
+		<ul class="breakdown-list">
+			{% for item in dashboard.marketplace_breakdown %}
+			<li class="breakdown-item">
+				<div class="breakdown-item__label-row">
+					<span class="{{ item.platform|platform_badge_class }}">{{ item.platform|platform_label }}</span>
+					<strong>{{ item.listing_count }}</strong>
+				</div>
+				<div class="breakdown-bar" aria-hidden="true">
+					<span class="breakdown-bar__fill" style="width: {{ item.share_percent }}%;"></span>
+				</div>
+			</li>
+			{% endfor %}
+		</ul>
+		{% else %}
+		<div class="empty-state empty-state--compact">
+			<h3>No marketplace data yet.</h3>
+			<p>Import a file before platform comparisons can be displayed.</p>
+		</div>
+		{% endif %}
+	</article>
+
+	<article class="card data-section data-section--wide">
+		<div class="section-heading">
+			<div>
+				<h2>Recently Updated Listings</h2>
+				<p class="section-copy">Most recently imported or scraped listings currently tracked in the database.</p>
+			</div>
+		</div>
+
+		{% if dashboard.recent_listings %}
+		<div class="table-wrap">
+			<table class="data-table">
+				<thead>
+					<tr>
+						<th scope="col">Product</th>
+						<th scope="col">Platform</th>
+						<th scope="col">Seller</th>
+						<th scope="col">Current Price</th>
+						<th scope="col">Last Updated</th>
+					</tr>
+				</thead>
+				<tbody>
+					{% for item in dashboard.recent_listings %}
+					<tr>
+						<td><a class="table-link" href="{{ url_for('main.product_detail', product_id=item.product_id) }}">{{ item.product_name }}</a></td>
+						<td><span class="{{ item.platform|platform_badge_class }}">{{ item.platform|platform_label }}</span></td>
+						<td>{{ item.seller_name or 'Not available' }}</td>
+						<td>{{ item.current_price|format_price(item.currency) }}</td>
+						<td>{{ item.last_updated|format_datetime }}</td>
+					</tr>
+					{% endfor %}
+				</tbody>
+			</table>
+		</div>
+		{% else %}
+		<div class="empty-state">
+			<h3>No listings available.</h3>
+			<p>No listing records are stored yet. Import a CSV or Excel file to populate the dashboard.</p>
+			<a class="button button--secondary" href="{{ url_for('main.import_data') }}">Import Data</a>
+		</div>
+		{% endif %}
+	</article>
+</section>
 {% endblock %}

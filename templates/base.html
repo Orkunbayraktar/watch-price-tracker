@@ -7,7 +7,41 @@
     <link rel="stylesheet" href="{{ url_for('static', filename='css/style.css') }}">
 </head>
 <body>
-    {% block content %}{% endblock %}
+    <a class="skip-link" href="#main-content">Skip to content</a>
+    <div class="app-shell" data-shell>
+        <aside class="app-sidebar" id="app-sidebar" aria-label="Primary navigation">
+            <div class="brand-block">
+                <p class="brand-kicker">Internal Analytics</p>
+                <a class="brand-title" href="{{ url_for('main.index') }}">Watch Price Tracker</a>
+                <p class="brand-copy">Retail price intelligence for marketplace watch listings.</p>
+            </div>
+
+            <nav class="sidebar-nav">
+                <a class="sidebar-link{% if is_active_nav('dashboard') %} is-active{% endif %}" href="{{ url_for('main.index') }}">Dashboard</a>
+                <a class="sidebar-link{% if is_active_nav('products') %} is-active{% endif %}" href="{{ url_for('main.products') }}">Products</a>
+                <a class="sidebar-link{% if is_active_nav('sellers') %} is-active{% endif %}" href="{{ url_for('main.sellers') }}">Sellers</a>
+                <a class="sidebar-link{% if is_active_nav('import') %} is-active{% endif %}" href="{{ url_for('main.import_data') }}">Import Data</a>
+            </nav>
+        </aside>
+
+        <div class="app-main">
+            <header class="page-header">
+                <div class="page-header__content">
+                    <button class="sidebar-toggle" type="button" aria-controls="app-sidebar" aria-expanded="false" data-sidebar-toggle>
+                        Navigation
+                    </button>
+                    <p class="eyebrow">{% block page_eyebrow %}Watch Price Tracker{% endblock %}</p>
+                    <h1>{% block page_title %}Dashboard{% endblock %}</h1>
+                    <p class="subtitle">{% block page_description %}Read-only operational analytics for imported and scraped watch marketplace data.{% endblock %}</p>
+                </div>
+                <div class="page-actions">{% block page_actions %}{% endblock %}</div>
+            </header>
+
+            <main class="page-content" id="main-content">
+                {% block content %}{% endblock %}
+            </main>
+        </div>
+    </div>
     <script src="{{ url_for('static', filename='js/main.js') }}"></script>
 </body>
 </html>

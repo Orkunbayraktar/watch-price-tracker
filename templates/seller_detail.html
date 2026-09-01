@@ -1,5 +1,70 @@
 {% extends "base.html" %}
 
+{% block title %}{{ seller_page.seller.name }} | Watch Price Tracker{% endblock %}
+{% block page_title %}{{ seller_page.seller.name }}{% endblock %}
+{% block page_description %}Seller-specific listing coverage and current price activity for normalized marketplace records.{% endblock %}
+{% block page_actions %}
+<a class="button button--ghost" href="{{ url_for('main.sellers') }}">Back to Sellers</a>
+{% endblock %}
+
 {% block content %}
-<h1>Seller Detail</h1>
+<section class="metrics-grid metrics-grid--detail">
+	<article class="card metric-card metric-card--detail">
+		<p class="metric-card__label">Platform</p>
+		<p class="metric-card__value metric-card__value--small">{{ seller_page.seller.platform|platform_label }}</p>
+	</article>
+	<article class="card metric-card metric-card--detail">
+		<p class="metric-card__label">Rating</p>
+		<p class="metric-card__value metric-card__value--small">{{ seller_page.seller.rating if seller_page.seller.rating is not none else 'Not available' }}</p>
+	</article>
+	<article class="card metric-card metric-card--detail">
+		<p class="metric-card__label">Listings</p>
+		<p class="metric-card__value metric-card__value--small">{{ seller_page.listing_count }}</p>
+	</article>
+	<article class="card metric-card metric-card--detail">
+		<p class="metric-card__label">Last Activity</p>
+		<p class="metric-card__value metric-card__value--small">{{ seller_page.last_activity|format_datetime }}</p>
+	</article>
+</section>
+
+<section class="card data-section">
+	<div class="section-heading">
+		<div>
+			<h2>Seller Product Listings</h2>
+			<p class="section-copy">Current products associated with this seller in the normalized listing table.</p>
+		</div>
+	</div>
+
+	{% if seller_page.products %}
+	<div class="table-wrap">
+		<table class="data-table">
+			<thead>
+				<tr>
+					<th scope="col">Brand</th>
+					<th scope="col">Product</th>
+					<th scope="col">Model</th>
+					<th scope="col">Current Price</th>
+					<th scope="col">Last Updated</th>
+				</tr>
+			</thead>
+			<tbody>
+				{% for item in seller_page.products %}
+				<tr>
+					<td>{{ item.brand or 'Not available' }}</td>
+					<td><a class="table-link" href="{{ url_for('main.product_detail', product_id=item.product_id) }}">{{ item.product_name }}</a></td>
+					<td>{{ item.model or 'Not available' }}</td>
+					<td>{{ item.current_price|format_price(item.currency) }}</td>
+					<td>{{ item.last_updated|format_datetime }}</td>
+				</tr>
+				{% endfor %}
+			</tbody>
+		</table>
+	</div>
+	{% else %}
+	<div class="empty-state empty-state--compact">
+		<h3>No listing rows for this seller yet.</h3>
+		<p>The seller record exists, but no associated listing data has been stored.</p>
+	</div>
+	{% endif %}
+</section>
 {% endblock %}

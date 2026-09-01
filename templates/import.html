@@ -1,31 +1,17 @@
 {% extends "base.html" %}
 
 {% block title %}Import Data | Watch Price Tracker{% endblock %}
+{% block page_title %}Import Data{% endblock %}
+{% block page_description %}Validate CSV or XLSX files first, preview normalized rows, then import only valid records into the local database.{% endblock %}
 
 {% block content %}
-<main class="page-shell">
-	<header class="topbar">
-		<div>
-			<p class="eyebrow">Watch Price Tracker</p>
-			<h1>Import Data</h1>
-			<p class="subtitle">Upload a CSV or XLSX file, preview the normalized rows, then import only the valid records into the local database.</p>
-		</div>
-
-		<nav class="nav" aria-label="Primary navigation">
-			<a class="nav-link" href="{{ url_for('main.index') }}">Dashboard</a>
-			<a class="nav-link is-active" href="{{ url_for('main.import_data') }}">Import Data</a>
-			<span class="nav-link is-placeholder" aria-disabled="true">Products</span>
-			<span class="nav-link is-placeholder" aria-disabled="true">Sellers</span>
-		</nav>
-	</header>
-
 	<section class="card import-card">
 		<h2>Upload File</h2>
-		<p class="subtitle">Supported formats: CSV and XLSX. Maximum upload size: 10 MB.</p>
+		<p class="section-copy">Supported formats: CSV and XLSX. Maximum upload size: 10 MB.</p>
 		<p class="supporting-link"><a href="{{ url_for('static', filename='examples/watch_import_template.csv') }}">Download example CSV</a></p>
 
 		{% if page_error %}
-		<div class="page-message is-error" role="alert">{{ page_error }}</div>
+		<div class="page-message page-message--error" role="alert">{{ page_error }}</div>
 		{% endif %}
 
 		<form class="import-form" action="{{ url_for('main.import_data') }}" method="post" enctype="multipart/form-data">
@@ -35,14 +21,14 @@
 				<span class="upload-hint">Select a local CSV or XLSX file.</span>
 				<input id="import-file" name="import_file" type="file" accept=".csv,.xlsx" required>
 			</label>
-			<button class="action-button" type="submit">Preview File</button>
+			<button class="button button--primary" type="submit">Preview File</button>
 		</form>
 	</section>
 
 	{% if preview_result %}
 	<section class="card preview-card" aria-labelledby="preview-title">
 		<h2 id="preview-title">Preview / Validation</h2>
-		<p class="subtitle">File: {{ preview_result.safe_filename }}</p>
+		<p class="section-copy">File: {{ preview_result.safe_filename }}</p>
 
 		<div class="result-grid">
 			<div class="result-stat">
@@ -93,7 +79,7 @@
 
 		{% if preview_result.validation_errors %}
 		<h3>Validation Errors</h3>
-		<ul class="message-list is-warning">
+		<ul class="message-list message-list--warning">
 			{% for error in preview_result.validation_errors %}
 			<li>{{ error }}</li>
 			{% endfor %}
@@ -104,7 +90,7 @@
 		<form class="import-form import-confirmation" action="{{ url_for('main.import_data') }}" method="post">
 			<input type="hidden" name="action" value="import">
 			<input type="hidden" name="preview_token" value="{{ preview_result.import_token }}">
-			<button class="action-button" type="submit">Import Valid Rows</button>
+			<button class="button button--primary" type="submit">Import Valid Rows</button>
 		</form>
 		{% endif %}
 	</section>
@@ -141,7 +127,7 @@
 
 		{% if import_summary.validation_errors %}
 		<h3>Import Errors</h3>
-		<ul class="message-list is-error">
+		<ul class="message-list message-list--error">
 			{% for error in import_summary.validation_errors %}
 			<li>{{ error }}</li>
 			{% endfor %}
@@ -149,5 +135,4 @@
 		{% endif %}
 	</section>
 	{% endif %}
-</main>
 {% endblock %}

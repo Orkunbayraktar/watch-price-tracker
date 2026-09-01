@@ -1,5 +1,122 @@
 {% extends "base.html" %}
 
+{% block title %}{{ product_page.product.name }} | Watch Price Tracker{% endblock %}
+{% block page_title %}{{ product_page.product.name }}{% endblock %}
+{% block page_description %}Marketplace-level detail for a single normalized product, including current listings and price history.{% endblock %}
+{% block page_actions %}
+<a class="button button--ghost" href="{{ url_for('main.products') }}">Back to Products</a>
+{% endblock %}
+
 {% block content %}
-<h1>Product Detail</h1>
+<section class="metrics-grid metrics-grid--detail">
+	<article class="card metric-card metric-card--detail">
+		<p class="metric-card__label">Brand</p>
+		<p class="metric-card__value metric-card__value--small">{{ product_page.product.brand or 'Not available' }}</p>
+	</article>
+	<article class="card metric-card metric-card--detail">
+		<p class="metric-card__label">Model</p>
+		<p class="metric-card__value metric-card__value--small">{{ product_page.product.model or 'Not available' }}</p>
+	</article>
+	<article class="card metric-card metric-card--detail">
+		<p class="metric-card__label">Lowest Current Price</p>
+		<p class="metric-card__value metric-card__value--small">{{ product_page.lowest_current_price|format_price }}</p>
+	</article>
+	<article class="card metric-card metric-card--detail">
+		<p class="metric-card__label">Listings / Sellers</p>
+		<p class="metric-card__value metric-card__value--small">{{ product_page.listing_count }} / {{ product_page.seller_count }}</p>
+	</article>
+</section>
+
+<section class="layout-grid layout-grid--detail">
+	<article class="card data-section">
+		<div class="section-heading">
+			<div>
+				<h2>Current Marketplace Listings</h2>
+				<p class="section-copy">Live normalized listing records currently associated with this product.</p>
+			</div>
+		</div>
+
+		{% if product_page.current_listings %}
+		<div class="table-wrap">
+			<table class="data-table">
+				<thead>
+					<tr>
+						<th scope="col">Platform</th>
+						<th scope="col">Seller</th>
+						<th scope="col">Current Price</th>
+						<th scope="col">Old Price</th>
+						<th scope="col">Discount</th>
+						<th scope="col">Availability</th>
+						<th scope="col">Last Updated</th>
+					</tr>
+				</thead>
+				<tbody>
+					{% for listing in product_page.current_listings %}
+					<tr{% if listing.is_lowest_price %} class="row-highlight"{% endif %}>
+						<td><span class="{{ listing.platform|platform_badge_class }}">{{ listing.platform|platform_label }}</span></td>
+						<td>{{ listing.seller_name or 'Not available' }}</td>
+						<td>
+							{{ listing.current_price|format_price(listing.currency) }}
+							{% if listing.is_lowest_price %}<span class="inline-status inline-status--success">Lowest price</span>{% endif %}
+						</td>
+						<td>{{ listing.old_price|format_price(listing.currency) }}</td>
+						<td>{% if listing.discount_percentage is not none %}{{ listing.discount_percentage }}%{% else %}Not available{% endif %}</td>
+						<td>{{ listing.availability or 'Not available' }}</td>
+						<td>{{ listing.last_updated|format_datetime }}</td>
+					</tr>
+					{% endfor %}
+				</tbody>
+			</table>
+		</div>
+		{% else %}
+		<div class="empty-state empty-state--compact">
+			<h3>No listings for this product yet.</h3>
+			<p>Import data or store a valid scraper result to populate current listings.</p>
+		</div>
+		{% endif %}
+	</article>
+
+	<article class="card data-section">
+		<div class="section-heading">
+			<div>
+				<h2>Price History</h2>
+				<p class="section-copy">Latest recorded observations for this product across tracked listings.</p>
+			</div>
+		</div>
+
+		{% if product_page.price_history %}
+		<div class="table-wrap">
+			<table class="data-table">
+				<thead>
+					<tr>
+						<th scope="col">Recorded</th>
+						<th scope="col">Platform</th>
+						<th scope="col">Seller</th>
+						<th scope="col">Price</th>
+						<th scope="col">Old Price</th>
+						<th scope="col">Discount</th>
+					</tr>
+				</thead>
+				<tbody>
+					{% for item in product_page.price_history %}
+					<tr>
+						<td>{{ item.recorded_at|format_datetime }}</td>
+						<td><span class="{{ item.platform|platform_badge_class }}">{{ item.platform|platform_label }}</span></td>
+						<td>{{ item.seller_name or 'Not available' }}</td>
+						<td>{{ item.price|format_price(item.currency) }}</td>
+						<td>{{ item.old_price|format_price(item.currency) }}</td>
+						<td>{% if item.discount_percentage is not none %}{{ item.discount_percentage }}%{% else %}Not available{% endif %}</td>
+					</tr>
+					{% endfor %}
+				</tbody>
+			</table>
+		</div>
+		{% else %}
+		<div class="empty-state empty-state--compact">
+			<h3>No price history recorded yet.</h3>
+			<p>Price observations will appear here after imports or successful scraper persistence runs.</p>
+		</div>
+		{% endif %}
+	</article>
+</section>
 {% endblock %}

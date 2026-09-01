@@ -2,10 +2,13 @@
 
 import logging
 
-from flask import Blueprint, current_app, render_template, request
+from flask import Blueprint, abort, current_app, render_template, request
 from werkzeug.exceptions import RequestEntityTooLarge
 
 from services.import_service import ImportServiceError, commit_import, preview_import
+from services.dashboard_service import get_dashboard_data
+from services.product_service import get_product_detail, list_products
+from services.seller_service import get_seller_detail, list_sellers
 
 
 main_bp = Blueprint("main", __name__)
@@ -15,7 +18,49 @@ logger = logging.getLogger(__name__)
 @main_bp.route("/")
 def index() -> str:
 	"""Render the homepage dashboard."""
-	return render_template("index.html")
+	return render_template("index.html", dashboard=get_dashboard_data())
+
+
+@main_bp.route("/products")
+def products() -> str:
+	"""Render the paginated products analytics page."""
+	product_result = list_products(
+		q=request.args.get("q"),
+		brand=request.args.get("brand"),
+		platform=request.args.get("platform"),
+		sort=request.args.get("sort", "updated_desc"),
+		page=request.args.get("page", 1, type=int) or 1,
+	)
+	return render_template("products.html", product_result=product_result)
+
+
+@main_bp.route("/products/<int:product_id>")
+def product_detail(product_id: int) -> str:
+	"""Render the product detail page for a single product."""
+	product_page = get_product_detail(product_id)
+	if product_page is None:
+		abort(404)
+	return render_template("product_detail.html", product_page=product_page)
+
+
+@main_bp.route("/sellers")
+def sellers() -> str:
+	"""Render the paginated sellers analytics page."""
+	seller_result = list_sellers(
+		q=request.args.get("q"),
+		platform=request.args.get("platform"),
+		page=request.args.get("page", 1, type=int) or 1,
+	)
+	return render_template("sellers.html", seller_result=seller_result)
+
+
+@main_bp.route("/sellers/<int:seller_id>")
+def seller_detail(seller_id: int) -> str:
+	"""Render the seller detail page for a single seller."""
+	seller_page = get_seller_detail(seller_id)
+	if seller_page is None:
+		abort(404)
+	return render_template("seller_detail.html", seller_page=seller_page)
 
 
 @main_bp.route("/import", methods=["GET", "POST"])

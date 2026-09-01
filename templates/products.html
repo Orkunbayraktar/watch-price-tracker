@@ -1,5 +1,124 @@
 {% extends "base.html" %}
 
+{% block title %}Products | Watch Price Tracker{% endblock %}
+{% block page_title %}Products{% endblock %}
+{% block page_description %}Search and compare normalized marketplace products without loading every listing into one page.{% endblock %}
+{% block page_actions %}
+<a class="button button--secondary" href="{{ url_for('main.import_data') }}">Import Data</a>
+{% endblock %}
+
 {% block content %}
-<h1>Products</h1>
+<section class="card filter-card">
+	<form class="filter-form" method="get" action="{{ url_for('main.products') }}">
+		<div class="form-field form-field--wide">
+			<label for="product-search">Search</label>
+			<input id="product-search" type="search" name="q" value="{{ product_result.filters.q }}" placeholder="Search brand, product, or model">
+		</div>
+		<div class="form-field">
+			<label for="product-brand">Brand</label>
+			<select id="product-brand" name="brand">
+				<option value="">All brands</option>
+				{% for brand in product_result.available_brands %}
+				<option value="{{ brand }}" {% if product_result.filters.brand == brand %}selected{% endif %}>{{ brand }}</option>
+				{% endfor %}
+			</select>
+		</div>
+		<div class="form-field">
+			<label for="product-platform">Platform</label>
+			<select id="product-platform" name="platform">
+				<option value="">All platforms</option>
+				{% for platform in product_result.available_platforms %}
+				<option value="{{ platform }}" {% if product_result.filters.platform == platform %}selected{% endif %}>{{ platform|platform_label }}</option>
+				{% endfor %}
+			</select>
+		</div>
+		<div class="form-field">
+			<label for="product-sort">Sort by</label>
+			<select id="product-sort" name="sort">
+				{% for value, label in product_result.sort_options %}
+				<option value="{{ value }}" {% if product_result.filters.sort == value %}selected{% endif %}>{{ label }}</option>
+				{% endfor %}
+			</select>
+		</div>
+		<div class="form-actions">
+			<button class="button button--primary" type="submit">Apply Filters</button>
+			<a class="button button--ghost" href="{{ url_for('main.products') }}">Reset</a>
+		</div>
+	</form>
+</section>
+
+<section class="card data-section">
+	<div class="section-heading">
+		<div>
+			<h2>Product Catalog</h2>
+			<p class="section-copy">{{ product_result.total_count }} products found{% if product_result.filters.has_filters %} for the current filters{% endif %}.</p>
+		</div>
+	</div>
+
+	{% if product_result.items %}
+	<div class="table-wrap">
+		<table class="data-table">
+			<thead>
+				<tr>
+					<th scope="col">Brand</th>
+					<th scope="col">Product</th>
+					<th scope="col">Model</th>
+					<th scope="col">Platform / Listings</th>
+					<th scope="col">Lowest Current Price</th>
+					<th scope="col">Seller Count</th>
+					<th scope="col">Last Updated</th>
+				</tr>
+			</thead>
+			<tbody>
+				{% for item in product_result.items %}
+				<tr>
+					<td>{{ item.brand or 'Not available' }}</td>
+					<td><a class="table-link" href="{{ url_for('main.product_detail', product_id=item.product_id) }}">{{ item.name }}</a></td>
+					<td>{{ item.model or 'Not available' }}</td>
+					<td>
+						<div class="platform-stack">
+							{% for platform in item.platforms %}
+							<span class="{{ platform|platform_badge_class }}">{{ platform|platform_label }}</span>
+							{% endfor %}
+						</div>
+						<div class="table-meta">{{ item.listing_count }} listing{% if item.listing_count != 1 %}s{% endif %}</div>
+					</td>
+					<td>{{ item.lowest_current_price|format_price }}</td>
+					<td>{{ item.seller_count }}</td>
+					<td>{{ item.last_updated|format_datetime }}</td>
+				</tr>
+				{% endfor %}
+			</tbody>
+		</table>
+	</div>
+	{% else %}
+	<div class="empty-state">
+		{% if product_result.filters.has_filters %}
+		<h3>No products matched the current filters.</h3>
+		<p>Try broadening the search, clearing filters, or importing more records.</p>
+		<a class="button button--ghost" href="{{ url_for('main.products') }}">Reset Filters</a>
+		{% else %}
+		<h3>No product data yet.</h3>
+		<p>Import a CSV or Excel file to populate the catalog view.</p>
+		<a class="button button--secondary" href="{{ url_for('main.import_data') }}">Import Data</a>
+		{% endif %}
+	</div>
+	{% endif %}
+
+	{% if product_result.total_pages > 1 %}
+	<nav class="pagination" aria-label="Products pagination">
+		{% if product_result.page > 1 %}
+		<a class="button button--ghost" href="{{ url_for('main.products') }}?{{ merge_query_params(page=product_result.page - 1) }}">Previous</a>
+		{% else %}
+		<span class="button button--ghost is-disabled" aria-disabled="true">Previous</span>
+		{% endif %}
+		<span class="pagination__status">Page {{ product_result.page }} of {{ product_result.total_pages }}</span>
+		{% if product_result.page < product_result.total_pages %}
+		<a class="button button--ghost" href="{{ url_for('main.products') }}?{{ merge_query_params(page=product_result.page + 1) }}">Next</a>
+		{% else %}
+		<span class="button button--ghost is-disabled" aria-disabled="true">Next</span>
+		{% endif %}
+	</nav>
+	{% endif %}
+</section>
 {% endblock %}

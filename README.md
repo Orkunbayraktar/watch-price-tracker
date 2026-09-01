@@ -13,17 +13,17 @@ The goal of this project is to monitor selected watch brands and models on Trend
 
 ## Planned Features
 
-- [ ] Trendyol scraper
-- [ ] Hepsiburada scraper
+- [x] Trendyol scraper
+- [x] Hepsiburada scraper
 - [x] robots.txt control
 - [x] SQLite database
 - [x] Product and seller records
 - [x] Price history
-- [ ] Flask web dashboard
-- [ ] Product filtering
-- [ ] Seller detail screen
+- [x] Flask web dashboard
+- [x] Product filtering
+- [x] Seller detail screen
 - [ ] Price charts
-- [ ] Manual data update
+- [x] Manual data update
 - [ ] Windows executable
 
 ## Tech Stack
@@ -79,6 +79,7 @@ Activate it on Windows PowerShell:
 This project is an actively developed university internship project.
 The current implementation includes a Trendyol single-product scraper proof of concept, not a full marketplace scraper.
 The current implementation also includes a Hepsiburada single-product scraper proof of concept, not a full marketplace scraper.
+The local Flask interface now includes a read-only analytics dashboard with database-backed product, seller, and import views.
 
 ## Data Sources
 
@@ -105,6 +106,13 @@ This project does not attempt to bypass platform protections, fake browser ident
 - Each uploaded file is validated and previewed before any database write happens.
 - Only valid rows are imported into the database.
 - Existing Product, Seller, and Listing records are matched through the current persistence logic, so duplicate main records are not created when the same file is imported again.
+
+## Analytics Dashboard
+
+- The `/` route shows real summary metrics, recent price observations, recently updated listings, and a marketplace breakdown.
+- The `/products` route supports real database-backed search, brand filtering, platform filtering, safe sorting, and server-side pagination.
+- The `/sellers` route supports seller search, platform filtering, and server-side pagination.
+- Product and seller detail pages expose current listing records and linked navigation between related entities.
 
 ## Development Smoke Test
 
