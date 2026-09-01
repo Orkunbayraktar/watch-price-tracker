@@ -1,0 +1,55 @@
+{% extends "base.html" %}
+
+{% block title %}Scrape Runs | Watch Price Tracker{% endblock %}
+{% block page_title %}Scrape Runs{% endblock %}
+{% block page_description %}Operational history for sequential batch scraping runs recorded in the local database.{% endblock %}
+{% block page_actions %}
+<a class="button button--ghost" href="{{ url_for('main.index') }}">Back to Dashboard</a>
+{% endblock %}
+
+{% block content %}
+<section class="card data-section">
+	<div class="section-heading">
+		<div>
+			<h2>Recent Batch Runs</h2>
+			<p class="section-copy">Latest recorded sequential scraping runs across supported marketplaces.</p>
+		</div>
+	</div>
+
+	{% if scrape_runs %}
+	<div class="table-wrap">
+		<table class="data-table">
+			<thead>
+				<tr>
+					<th scope="col">Run ID</th>
+					<th scope="col">Platform</th>
+					<th scope="col">Status</th>
+					<th scope="col">Started</th>
+					<th scope="col">Duration</th>
+					<th scope="col">Successful</th>
+					<th scope="col">Failed</th>
+				</tr>
+			</thead>
+			<tbody>
+				{% for item in scrape_runs %}
+				<tr>
+					<td><a class="table-link" href="{{ url_for('main.scrape_run_detail', run_id=item.run_id) }}">{{ item.run_id }}</a></td>
+					<td><span class="{{ item.platform|platform_badge_class }}">{{ item.platform|platform_label }}</span></td>
+					<td><span class="run-status-badge run-status-badge--{{ item.status }}">{{ item.status.replace('_', ' ')|title }}</span></td>
+					<td>{{ item.started_at|format_datetime }}</td>
+					<td>{{ item.duration if item.duration is not none else 'Not available' }}</td>
+					<td>{{ item.successful_items }}</td>
+					<td>{{ item.failed_items }}</td>
+				</tr>
+				{% endfor %}
+			</tbody>
+		</table>
+	</div>
+	{% else %}
+	<div class="empty-state">
+		<h3>No scrape runs have been recorded yet.</h3>
+		<p>Use the batch CLI to start storing tracked run history in the local database.</p>
+	</div>
+	{% endif %}
+</section>
+{% endblock %}

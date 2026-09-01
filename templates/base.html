@@ -20,6 +20,7 @@
                 <a class="sidebar-link{% if is_active_nav('dashboard') %} is-active{% endif %}" href="{{ url_for('main.index') }}">Dashboard</a>
                 <a class="sidebar-link{% if is_active_nav('products') %} is-active{% endif %}" href="{{ url_for('main.products') }}">Products</a>
                 <a class="sidebar-link{% if is_active_nav('sellers') %} is-active{% endif %}" href="{{ url_for('main.sellers') }}">Sellers</a>
+                <a class="sidebar-link{% if is_active_nav('scrape_runs') %} is-active{% endif %}" href="{{ url_for('main.scrape_runs') }}">Scrape Runs</a>
                 <a class="sidebar-link{% if is_active_nav('import') %} is-active{% endif %}" href="{{ url_for('main.import_data') }}">Import Data</a>
             </nav>
         </aside>

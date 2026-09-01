@@ -1,0 +1,88 @@
+{% extends "base.html" %}
+
+{% block title %}Scrape Run {{ run_detail.run.run_id }} | Watch Price Tracker{% endblock %}
+{% block page_title %}Scrape Run {{ run_detail.run.run_id }}{% endblock %}
+{% block page_description %}Item-level operational detail for one sequential batch scraping run.{% endblock %}
+{% block page_actions %}
+<a class="button button--ghost" href="{{ url_for('main.scrape_runs') }}">Back to Scrape Runs</a>
+{% endblock %}
+
+{% block content %}
+<section class="metrics-grid metrics-grid--product-intelligence">
+	<article class="card metric-card metric-card--detail">
+		<p class="metric-card__label">Status</p>
+		<p class="metric-card__value metric-card__value--small"><span class="run-status-badge run-status-badge--{{ run_detail.run.status }}">{{ run_detail.run.status.replace('_', ' ')|title }}</span></p>
+	</article>
+	<article class="card metric-card metric-card--detail">
+		<p class="metric-card__label">Platform</p>
+		<p class="metric-card__value metric-card__value--small">{{ run_detail.run.platform|platform_label }}</p>
+	</article>
+	<article class="card metric-card metric-card--detail">
+		<p class="metric-card__label">Successful</p>
+		<p class="metric-card__value metric-card__value--small">{{ run_detail.run.successful_items }}</p>
+	</article>
+	<article class="card metric-card metric-card--detail">
+		<p class="metric-card__label">Failed</p>
+		<p class="metric-card__value metric-card__value--small">{{ run_detail.run.failed_items }}</p>
+	</article>
+	<article class="card metric-card metric-card--detail">
+		<p class="metric-card__label">Skipped</p>
+		<p class="metric-card__value metric-card__value--small">{{ run_detail.run.skipped_items }}</p>
+	</article>
+</section>
+
+<section class="card data-section">
+	<div class="section-heading">
+		<div>
+			<h2>Run Metadata</h2>
+			<p class="section-copy">Started {{ run_detail.run.started_at|format_datetime }} | Finished {{ run_detail.run.finished_at|format_datetime }} | Duration {{ run_detail.run.duration if run_detail.run.duration is not none else 'Not available' }}</p>
+		</div>
+	</div>
+	{% if run_detail.run.error_message %}
+	<p class="table-meta">{{ run_detail.run.error_message }}</p>
+	{% endif %}
+</section>
+
+<section class="card data-section">
+	<div class="section-heading">
+		<div>
+			<h2>Batch Item Results</h2>
+			<p class="section-copy">Each requested URL is stored as a success, failure, or skip without rolling back other successful items.</p>
+		</div>
+	</div>
+
+	{% if run_detail.items %}
+	<div class="table-wrap">
+		<table class="data-table">
+			<thead>
+				<tr>
+					<th scope="col">Status</th>
+					<th scope="col">Platform</th>
+					<th scope="col">URL</th>
+					<th scope="col">Product</th>
+					<th scope="col">Current Price</th>
+					<th scope="col">Failure</th>
+				</tr>
+			</thead>
+			<tbody>
+				{% for item in run_detail.items %}
+				<tr>
+					<td><span class="run-status-badge run-status-badge--{{ item.status }}">{{ item.status.replace('_', ' ')|title }}</span></td>
+					<td>{% if item.platform %}<span class="{{ item.platform|platform_badge_class }}">{{ item.platform|platform_label }}</span>{% else %}Unknown{% endif %}</td>
+					<td>{{ item.url }}</td>
+					<td>{% if item.product_id %}<a class="table-link" href="{{ url_for('main.product_detail', product_id=item.product_id) }}">{{ item.product_name }}</a>{% else %}{{ item.product_name or 'Not available' }}{% endif %}</td>
+					<td>{% if item.current_price is not none %}{{ item.current_price|format_price(item.currency or 'TRY') }}{% else %}Not available{% endif %}</td>
+					<td>{% if item.failure_reason %}{{ item.failure_reason }}{% if item.error_message %} - {{ item.error_message }}{% endif %}{% else %}Not available{% endif %}</td>
+				</tr>
+				{% endfor %}
+			</tbody>
+		</table>
+	</div>
+	{% else %}
+	<div class="empty-state empty-state--compact">
+		<h3>No item rows were recorded for this run.</h3>
+		<p>This usually means the batch was created with no URLs to process.</p>
+	</div>
+	{% endif %}
+</section>
+{% endblock %}

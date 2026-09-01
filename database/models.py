@@ -116,7 +116,7 @@ class PriceHistory(db.Model):
 
 
 class ScrapeRun(db.Model):
-	"""Track metadata for future scraping runs."""
+	"""Track metadata for a scraping batch run."""
 
 	__tablename__ = "scrape_runs"
 
@@ -124,8 +124,35 @@ class ScrapeRun(db.Model):
 	platform = db.Column(db.String(50), nullable=False, index=True)
 	started_at = db.Column(db.DateTime(timezone=True), nullable=False, default=utc_now)
 	finished_at = db.Column(db.DateTime(timezone=True), nullable=True)
-	status = db.Column(db.String(20), nullable=False, default="running")
+	status = db.Column(db.String(32), nullable=False, default="running")
 	products_found = db.Column(db.Integer, nullable=False, default=0)
 	listings_found = db.Column(db.Integer, nullable=False, default=0)
 	errors_count = db.Column(db.Integer, nullable=False, default=0)
 	error_message = db.Column(db.Text, nullable=True)
+
+	items = db.relationship(
+		"ScrapeRunItem",
+		back_populates="scrape_run",
+		cascade="all, delete-orphan",
+		order_by="ScrapeRunItem.id",
+	)
+
+
+class ScrapeRunItem(db.Model):
+	"""Track the item-level result for one URL inside a scraping batch run."""
+
+	__tablename__ = "scrape_run_items"
+
+	id = db.Column(db.Integer, primary_key=True)
+	scrape_run_id = db.Column(db.Integer, db.ForeignKey("scrape_runs.id", ondelete="CASCADE"), nullable=False, index=True)
+	listing_id = db.Column(db.Integer, db.ForeignKey("listings.id", ondelete="SET NULL"), nullable=True)
+	url = db.Column(db.Text, nullable=False)
+	platform = db.Column(db.String(50), nullable=True, index=True)
+	status = db.Column(db.String(20), nullable=False, default="running")
+	failure_reason = db.Column(db.String(50), nullable=True)
+	error_message = db.Column(db.Text, nullable=True)
+	started_at = db.Column(db.DateTime(timezone=True), nullable=False, default=utc_now)
+	finished_at = db.Column(db.DateTime(timezone=True), nullable=True)
+
+	scrape_run = db.relationship("ScrapeRun", back_populates="items")
+	listing = db.relationship("Listing")

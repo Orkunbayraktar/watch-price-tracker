@@ -170,9 +170,31 @@ python scripts/smoke_test_live.py --platform hepsiburada --fetcher playwright "<
 
 For browser debugging you can add `--headed`, but headless mode remains the default and preferred smoke-test path.
 
+## Batch Scraping
+
+Use the following command from the project root to run a controlled sequential batch scrape from a text file:
+
+```powershell
+python scripts/batch_scrape.py --platform trendyol --fetcher playwright urls.txt
+```
+
+Batch scraping currently runs sequentially on purpose. Each URL still goes through the existing marketplace scraper, robots.txt gate, selected fetcher, parser, and generic persistence service.
+
+- blank lines and `#` comment lines in the URL file are ignored
+- duplicate URLs inside the same batch are skipped after conservative normalization
+- per-item failures do not roll back successful items from the same run
+- batch metadata and item-level results are stored through `ScrapeRun` and `ScrapeRunItem`
+- Hepsiburada URLs can be included, but platform-side HTTP 403 responses are recorded as normal failures and are not bypassed
+
+The batch CLI prints a compact start summary, one line per processed URL, and a final result summary with the stored ScrapeRun ID.
+
 ## Local Database Schema Changes
 
 The local SQLite database file is created with `create_all()`. Changing a SQLAlchemy model later does not rewrite an existing SQLite table definition.
+
+Batch scraping adds a new `scrape_run_items` table. If your local development database was created before this table existed, start the app or run any script path that calls `initialize_database(app)` so `db.create_all()` can create the missing table.
+
+The existing `scrape_runs` model is also now used for real operational tracking. No silent database deletion is performed by this change.
 
 If your existing local `data/watch_tracker.db` was created while `listings.seller_id` was still `NOT NULL`, you must recreate that local database before live smoke tests can persist seller-less listings.
 

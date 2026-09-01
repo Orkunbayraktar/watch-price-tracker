@@ -9,6 +9,7 @@ from services.dashboard_service import get_dashboard_data
 from services.import_service import ImportServiceError, commit_import, preview_import
 from services.price_analysis_service import get_product_price_intelligence_page
 from services.product_service import list_products
+from services.scrape_run_service import get_recent_scrape_run_summaries, get_scrape_run_detail
 from services.seller_service import get_seller_detail, list_sellers
 
 
@@ -58,6 +59,21 @@ def sellers() -> str:
 		page=request.args.get("page", 1, type=int) or 1,
 	)
 	return render_template("sellers.html", seller_result=seller_result)
+
+
+@main_bp.route("/scrape-runs")
+def scrape_runs() -> str:
+	"""Render recent scrape runs for operational visibility."""
+	return render_template("scrape_runs.html", scrape_runs=get_recent_scrape_run_summaries(limit=25))
+
+
+@main_bp.route("/scrape-runs/<int:run_id>")
+def scrape_run_detail(run_id: int) -> str:
+	"""Render the detail page for a single scrape run."""
+	run_detail = get_scrape_run_detail(run_id)
+	if run_detail is None:
+		abort(404)
+	return render_template("scrape_run_detail.html", run_detail=run_detail)
 
 
 @main_bp.route("/sellers/<int:seller_id>")

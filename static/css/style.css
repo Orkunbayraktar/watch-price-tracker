@@ -453,6 +453,40 @@ h3 {
 	color: #455468;
 }
 
+.run-status-badge {
+	display: inline-flex;
+	align-items: center;
+	min-height: 32px;
+	padding: 0 var(--space-3);
+	border-radius: 999px;
+	border: 1px solid var(--border);
+	font-size: 0.8rem;
+	font-weight: 700;
+	background: var(--surface-strong);
+	color: var(--text);
+}
+
+.run-status-badge--completed,
+.run-status-badge--success {
+	background: var(--success-soft);
+	border-color: rgba(15, 123, 83, 0.18);
+	color: var(--success);
+}
+
+.run-status-badge--completed_with_errors,
+.run-status-badge--skipped,
+.run-status-badge--running {
+	background: var(--warning-soft);
+	border-color: rgba(154, 98, 0, 0.18);
+	color: var(--warning);
+}
+
+.run-status-badge--failed {
+	background: var(--danger-soft);
+	border-color: rgba(180, 35, 24, 0.18);
+	color: var(--danger);
+}
+
 .breakdown-list {
 	list-style: none;
 	margin: 0;

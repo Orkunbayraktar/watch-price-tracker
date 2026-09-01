@@ -121,6 +121,7 @@ def is_active_nav(section: str) -> bool:
 		"dashboard": {"main.index"},
 		"products": {"main.products", "main.product_detail"},
 		"sellers": {"main.sellers", "main.seller_detail"},
+		"scrape_runs": {"main.scrape_runs", "main.scrape_run_detail"},
 		"import": {"main.import_data"},
 	}
 	return endpoint in sections.get(section, set())

@@ -10,7 +10,7 @@ import pytest
 
 from app import create_app
 from database.db import db, initialize_database
-from database.models import Listing, PriceHistory, Product, Seller
+from database.models import Listing, PriceHistory, Product, ScrapeRun, ScrapeRunItem, Seller
 
 
 @pytest.fixture
@@ -111,9 +111,53 @@ def seed_dashboard_data() -> dict[str, int]:
 	return {
 		"product_one_id": product_one.id,
 		"product_two_id": product_two.id,
+		"listing_one_id": listing_one.id,
 		"seller_one_id": seller_one.id,
 		"seller_two_id": seller_two.id,
 	}
+
+
+def seed_scrape_run_data() -> int:
+	ids = seed_dashboard_data()
+	now = datetime.now(timezone.utc)
+	listing = db.session.get(Listing, ids["listing_one_id"])
+	run = ScrapeRun(
+		platform="trendyol",
+		started_at=now - timedelta(minutes=5),
+		finished_at=now - timedelta(minutes=2),
+		status="completed_with_errors",
+		products_found=1,
+		listings_found=1,
+		errors_count=1,
+		error_message="1 of 2 processed batch items failed.",
+	)
+	db.session.add(run)
+	db.session.flush()
+	db.session.add_all(
+		[
+			ScrapeRunItem(
+				scrape_run=run,
+				listing=listing,
+				url="https://www.trendyol.com/casio/f-91w-p-1001",
+				platform="trendyol",
+				status="success",
+				started_at=now - timedelta(minutes=5),
+				finished_at=now - timedelta(minutes=4),
+			),
+			ScrapeRunItem(
+				scrape_run=run,
+				url="https://www.hepsiburada.com/casio-retro-pm-sacsa159wan1df",
+				platform="hepsiburada",
+				status="failed",
+				failure_reason="http_forbidden",
+				error_message="HTTP 403 response received.",
+				started_at=now - timedelta(minutes=3),
+				finished_at=now - timedelta(minutes=2),
+			),
+		]
+	)
+	db.session.commit()
+	return run.id
 
 
 def test_dashboard_loads(client) -> None:
@@ -141,6 +185,18 @@ def test_dashboard_metrics_use_real_database_values(client) -> None:
 	assert "Total Sellers" in body
 	assert "4.100,00 TL" in body
 	assert "Recently Updated Listings" in body
+
+
+def test_dashboard_latest_run_uses_real_database_values(client) -> None:
+	seed_scrape_run_data()
+	response = client.get("/")
+	body = response.get_data(as_text=True)
+
+	assert "Latest Scrape Run" in body
+	assert "Completed With Errors" in body
+	assert "Successful Items" in body
+	assert "Failed Items" in body
+	assert "Run ID" in body
 
 
 def test_products_page_loads(client) -> None:
@@ -266,6 +322,27 @@ def test_seller_detail_loads(client) -> None:
 	assert response.status_code == 200
 	assert "Seller Product Listings" in body
 	assert "Seiko Ocean" in body
+
+
+def test_scrape_runs_page_loads(client) -> None:
+	seed_scrape_run_data()
+	response = client.get("/scrape-runs")
+	body = response.get_data(as_text=True)
+
+	assert response.status_code == 200
+	assert "Recent Batch Runs" in body
+	assert "Completed With Errors" in body
+
+
+def test_scrape_run_detail_loads(client) -> None:
+	run_id = seed_scrape_run_data()
+	response = client.get(f"/scrape-runs/{run_id}")
+	body = response.get_data(as_text=True)
+
+	assert response.status_code == 200
+	assert "Batch Item Results" in body
+	assert "http_forbidden" in body
+	assert "Casio Retro" in body
 
 
 def test_filters_do_not_allow_unsafe_query_behavior(client) -> None:

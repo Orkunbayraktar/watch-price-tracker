@@ -4,6 +4,7 @@
 {% block page_title %}Dashboard{% endblock %}
 {% block page_description %}Real database-backed analytics for imported and scraped marketplace watch listings.{% endblock %}
 {% block page_actions %}
+<a class="button button--ghost" href="{{ url_for('main.scrape_runs') }}">Scrape Runs</a>
 <a class="button button--secondary" href="{{ url_for('main.import_data') }}">Import Data</a>
 {% endblock %}
 
@@ -28,6 +29,70 @@
 </section>
 
 <section class="layout-grid layout-grid--dashboard">
+	<article class="card data-section data-section--wide">
+		<div class="section-heading">
+			<div>
+				<h2>Latest Scrape Run</h2>
+				<p class="section-copy">Sequential batch scraping status from the latest tracked run.</p>
+			</div>
+		</div>
+
+		{% if dashboard.latest_scrape_run %}
+		<section class="metrics-grid metrics-grid--detail">
+			<article class="card metric-card metric-card--detail">
+				<p class="metric-card__label">Status</p>
+				<p class="metric-card__value metric-card__value--small"><span class="run-status-badge run-status-badge--{{ dashboard.latest_scrape_run.status }}">{{ dashboard.latest_scrape_run.status.replace('_', ' ')|title }}</span></p>
+			</article>
+			<article class="card metric-card metric-card--detail">
+				<p class="metric-card__label">Platform</p>
+				<p class="metric-card__value metric-card__value--small">{{ dashboard.latest_scrape_run.platform|platform_label }}</p>
+			</article>
+			<article class="card metric-card metric-card--detail">
+				<p class="metric-card__label">Successful Items</p>
+				<p class="metric-card__value metric-card__value--small">{{ dashboard.latest_scrape_run.successful_items }}</p>
+			</article>
+			<article class="card metric-card metric-card--detail">
+				<p class="metric-card__label">Failed Items</p>
+				<p class="metric-card__value metric-card__value--small">{{ dashboard.latest_scrape_run.failed_items }}</p>
+			</article>
+		</section>
+		<p class="table-meta">Run ID {{ dashboard.latest_scrape_run.run_id }} | Started {{ dashboard.latest_scrape_run.started_at|format_datetime }} | Finished {{ dashboard.latest_scrape_run.finished_at|format_datetime }}</p>
+		{% if dashboard.recent_scrape_runs %}
+		<div class="table-wrap">
+			<table class="data-table">
+				<thead>
+					<tr>
+						<th scope="col">Run ID</th>
+						<th scope="col">Platform</th>
+						<th scope="col">Status</th>
+						<th scope="col">Started</th>
+						<th scope="col">Successful</th>
+						<th scope="col">Failed</th>
+					</tr>
+				</thead>
+				<tbody>
+					{% for item in dashboard.recent_scrape_runs %}
+					<tr>
+						<td><a class="table-link" href="{{ url_for('main.scrape_run_detail', run_id=item.run_id) }}">{{ item.run_id }}</a></td>
+						<td><span class="{{ item.platform|platform_badge_class }}">{{ item.platform|platform_label }}</span></td>
+						<td><span class="run-status-badge run-status-badge--{{ item.status }}">{{ item.status.replace('_', ' ')|title }}</span></td>
+						<td>{{ item.started_at|format_datetime }}</td>
+						<td>{{ item.successful_items }}</td>
+						<td>{{ item.failed_items }}</td>
+					</tr>
+					{% endfor %}
+				</tbody>
+			</table>
+		</div>
+		{% endif %}
+		{% else %}
+		<div class="empty-state empty-state--compact">
+			<h3>No scrape runs recorded yet.</h3>
+			<p>Run the batch CLI to persist sequential scrape results and operational history.</p>
+		</div>
+		{% endif %}
+	</article>
+
 	<article class="card data-section">
 		<div class="section-heading">
 			<div>
