@@ -15,6 +15,7 @@ from database.db import db
 from database.models import ScrapeRun, ScrapeRunItem
 from services.persistence_service import PersistenceError, save_scraped_product
 from services.scraping_service import SCRAPER_CLASSES
+from services.url_service import normalize_tracking_url
 
 
 RUN_STATUS_RUNNING = "running"
@@ -82,15 +83,7 @@ def load_batch_urls(file_path: str | Path) -> list[str]:
 
 def normalize_batch_url(url: str) -> str:
 	"""Normalize a batch URL conservatively for in-run deduplication."""
-	trimmed = url.strip()
-	if not trimmed:
-		return ""
-
-	parts = urlsplit(trimmed)
-	if not parts.scheme or not parts.netloc:
-		return trimmed
-
-	return urlunsplit((parts.scheme, parts.netloc, parts.path, parts.query, ""))
+	return normalize_tracking_url(url)
 
 
 def run_batch(

@@ -2,7 +2,7 @@
 
 import logging
 
-from flask import Blueprint, abort, current_app, render_template, request
+from flask import Blueprint, abort, current_app, flash, redirect, render_template, request, url_for
 from werkzeug.exceptions import RequestEntityTooLarge
 
 from services.dashboard_service import get_dashboard_data
@@ -11,6 +11,15 @@ from services.price_analysis_service import get_product_price_intelligence_page
 from services.product_service import list_products
 from services.scrape_run_service import get_recent_scrape_run_summaries, get_scrape_run_detail
 from services.seller_service import get_seller_detail, list_sellers
+from services.watchlist_service import (
+	WatchlistValidationError,
+	create_watchlist_item,
+	delete_watchlist_item,
+	get_watchlist_item,
+	list_watchlist_items,
+	set_watchlist_item_active,
+	update_active_watchlist_items,
+)
 
 
 main_bp = Blueprint("main", __name__)
@@ -133,6 +142,78 @@ def import_data() -> str:
 	return render_template("import.html", **context)
 
 
+@main_bp.route("/watchlist")
+def watchlist() -> str:
+	"""Render the watchlist management page."""
+	return _render_watchlist_page()
+
+
+@main_bp.route("/watchlist", methods=["POST"])
+def add_watchlist_item() -> str:
+	"""Validate and store a tracked marketplace product URL."""
+	submitted_url = request.form.get("url", "")
+	submitted_label = request.form.get("label", "")
+	try:
+		create_watchlist_item(submitted_url, display_name=submitted_label)
+		flash("Product added to the watchlist.", "success")
+		return redirect(url_for("main.watchlist"))
+	except WatchlistValidationError as error:
+		flash(str(error), "error")
+	except Exception:
+		logger.exception("Unexpected error while creating a watchlist item")
+		flash("An unexpected error occurred while adding the watchlist item.", "error")
+	return _render_watchlist_page(form_values={"url": submitted_url, "label": submitted_label})
+
+
+@main_bp.route("/watchlist/<int:item_id>/toggle", methods=["POST"])
+def toggle_watchlist_item(item_id: int) -> str:
+	"""Pause or reactivate a tracked watchlist URL."""
+	item = get_watchlist_item(item_id)
+	if item is None:
+		abort(404)
+
+	updated_item = set_watchlist_item_active(item_id, not item.is_active)
+	if updated_item is None:
+		abort(404)
+
+	if updated_item.is_active:
+		flash("Watchlist item activated.", "success")
+	else:
+		flash("Watchlist item paused.", "warning")
+	return redirect(url_for("main.watchlist"))
+
+
+@main_bp.route("/watchlist/<int:item_id>/delete", methods=["POST"])
+def remove_watchlist_item(item_id: int) -> str:
+	"""Delete a tracked URL without removing persisted product history."""
+	item = delete_watchlist_item(item_id)
+	if item is None:
+		abort(404)
+	flash("Watchlist item removed.", "success")
+	return redirect(url_for("main.watchlist"))
+
+
+@main_bp.route("/watchlist/update-active", methods=["POST"])
+def update_watchlist() -> str:
+	"""Run a synchronous batch update for active watchlist items."""
+	try:
+		update_result = update_active_watchlist_items()
+		if update_result is None:
+			flash("No active watchlist items are available for updating.", "warning")
+			return _render_watchlist_page()
+		flash(
+			f"Batch update finished. Run ID {update_result.run_id}: {update_result.successful} successful, {update_result.failed} failed.",
+			"success" if update_result.failed == 0 else "warning",
+		)
+		return _render_watchlist_page(update_result=update_result)
+	except WatchlistValidationError as error:
+		flash(str(error), "error")
+	except Exception:
+		logger.exception("Unexpected error while updating watchlist items")
+		flash("An unexpected error occurred while updating the watchlist.", "error")
+	return _render_watchlist_page()
+
+
 @main_bp.app_errorhandler(RequestEntityTooLarge)
 def handle_request_entity_too_large(error: RequestEntityTooLarge) -> tuple[str, int]:
 	"""Render a friendly message when an uploaded file exceeds the configured size limit."""
@@ -145,4 +226,15 @@ def handle_request_entity_too_large(error: RequestEntityTooLarge) -> tuple[str, 
 			import_summary=None,
 		),
 		413,
+	)
+
+
+def _render_watchlist_page(*, update_result=None, form_values: dict[str, str] | None = None) -> str:
+	items = list_watchlist_items()
+	return render_template(
+		"watchlist.html",
+		watchlist_items=items,
+		active_watchlist_count=sum(1 for item in items if item.is_active),
+		update_result=update_result,
+		form_values=form_values or {"url": "", "label": ""},
 	)

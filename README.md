@@ -20,6 +20,7 @@ The goal of this project is to monitor selected watch brands and models on Trend
 - [x] Product and seller records
 - [x] Price history
 - [x] Flask web dashboard
+- [x] Watchlist management UI
 - [x] Product filtering
 - [x] Seller detail screen
 - [x] Price charts
@@ -89,6 +90,7 @@ This project is an actively developed university internship project.
 The current implementation includes a Trendyol single-product scraper proof of concept, not a full marketplace scraper.
 The current implementation also includes a Hepsiburada single-product scraper proof of concept, not a full marketplace scraper.
 The local Flask interface now includes a read-only analytics dashboard with database-backed product, seller, and import views.
+It also includes a watchlist management screen for tracking supported marketplace product URLs directly from the browser.
 
 ## Data Sources
 
@@ -135,6 +137,22 @@ This project does not attempt to bypass platform protections, fake browser ident
 - The `/products` route supports real database-backed search, brand filtering, platform filtering, safe sorting, and server-side pagination.
 - The `/sellers` route supports seller search, platform filtering, and server-side pagination.
 - Product and seller detail pages expose current listing records and linked navigation between related entities.
+
+## Watchlist
+
+- The `/watchlist` page lets you add, pause, reactivate, and remove tracked Trendyol and Hepsiburada product URLs through the local Flask UI.
+- Watchlist entries represent monitored URLs only. Removing or pausing a watchlist item does not delete persisted `Product`, `Listing`, or `PriceHistory` records.
+- URL validation reuses the existing scraper registry and supported product URL checks, so unsupported domains, malformed URLs, and unsafe schemes are rejected before storage.
+- Duplicate tracked URLs are prevented through conservative canonicalization: whitespace is trimmed, scheme and host casing are normalized, and URL fragments are removed while seller/product query parameters remain intact when present.
+- If a tracked URL already has matching database records, the watchlist page can show the latest known product link and price context without requiring a hard foreign key from watchlist items to products.
+
+## Manual Watchlist Updates
+
+- The watchlist page includes an `Update Active Products` action that runs a synchronous batch update for active tracked URLs.
+- Manual watchlist updates reuse the existing `ScrapeRun` and `ScrapeRunItem` infrastructure, so each run stores batch-level totals, duration, and per-item outcomes in the same operational history used by the batch CLI.
+- Trendyol watchlist updates default to the `playwright` fetch strategy because requests-based live acquisition returned HTTP 403 in real testing.
+- Hepsiburada updates stay inside the existing browser-based acquisition path. If the platform returns blocking pages or HTTP 403, the watchlist item remains tracked and the structured failure reason is stored.
+- After every attempted update, the tracked item stores `last_scraped_at`, `last_scrape_status`, and `last_failure_reason` for quick visibility in the UI.
 
 ## Price Intelligence
 
@@ -191,6 +209,8 @@ The batch CLI prints a compact start summary, one line per processed URL, and a 
 ## Local Database Schema Changes
 
 The local SQLite database file is created with `create_all()`. Changing a SQLAlchemy model later does not rewrite an existing SQLite table definition.
+
+Watchlist management adds a new `watchlist_items` table. If your local development database was created before this table existed, start the app through `python run.py` or run any helper that calls `initialize_database(app)` so `db.create_all()` can create the missing table.
 
 Batch scraping adds a new `scrape_run_items` table. If your local development database was created before this table existed, start the app or run any script path that calls `initialize_database(app)` so `db.create_all()` can create the missing table.
 

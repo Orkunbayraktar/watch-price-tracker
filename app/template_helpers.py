@@ -122,6 +122,7 @@ def is_active_nav(section: str) -> bool:
 		"products": {"main.products", "main.product_detail"},
 		"sellers": {"main.sellers", "main.seller_detail"},
 		"scrape_runs": {"main.scrape_runs", "main.scrape_run_detail"},
+		"watchlist": {"main.watchlist", "main.add_watchlist_item", "main.toggle_watchlist_item", "main.remove_watchlist_item", "main.update_watchlist"},
 		"import": {"main.import_data"},
 	}
 	return endpoint in sections.get(section, set())

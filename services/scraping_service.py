@@ -20,13 +20,36 @@ SCRAPER_CLASSES: tuple[type[ProductPageScraper], ...] = (
 )
 
 
-def create_scraper_for_url(url: str) -> ProductPageScraper | None:
-	"""Create the first scraper that explicitly supports the URL."""
+def get_scraper_class_for_url(url: str) -> type[ProductPageScraper] | None:
+	"""Return the registered scraper class that supports the provided URL."""
 	for scraper_class in SCRAPER_CLASSES:
 		if scraper_class.is_supported_url(url):
-			return scraper_class()
-
+			return scraper_class
 	return None
+
+
+def create_scraper_for_url(url: str) -> ProductPageScraper | None:
+	"""Create the first scraper that explicitly supports the URL."""
+	scraper_class = get_scraper_class_for_url(url)
+	if scraper_class is not None:
+		return scraper_class()
+	return None
+
+
+def get_platform_for_url(url: str) -> str | None:
+	"""Return the platform name for a supported product URL."""
+	scraper_class = get_scraper_class_for_url(url)
+	if scraper_class is None:
+		return None
+	return getattr(scraper_class, "platform", None)
+
+
+def extract_external_product_id_for_url(url: str) -> str | None:
+	"""Return the platform-specific product ID for a supported URL when available."""
+	scraper_class = get_scraper_class_for_url(url)
+	if scraper_class is None:
+		return None
+	return scraper_class.extract_external_product_id(url)
 
 
 def scrape_product_with_strategy(

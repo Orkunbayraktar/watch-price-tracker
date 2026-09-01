@@ -12,6 +12,7 @@ DATABASE_PATH = DATA_DIR / "watch_tracker.db"
 class Config:
 	"""Base Flask configuration."""
 
+	SECRET_KEY = "watch-price-tracker-dev"
 	SQLALCHEMY_DATABASE_URI = f"sqlite:///{DATABASE_PATH.as_posix()}"
 	SQLALCHEMY_TRACK_MODIFICATIONS = False
 	MAX_CONTENT_LENGTH = 10 * 1024 * 1024

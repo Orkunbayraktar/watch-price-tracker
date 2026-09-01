@@ -1,0 +1,153 @@
+{% extends "base.html" %}
+
+{% block title %}Watchlist | Watch Price Tracker{% endblock %}
+{% block page_title %}Watchlist{% endblock %}
+{% block page_description %}Manage the marketplace product URLs that should be monitored through the local Flask interface.{% endblock %}
+{% block page_actions %}
+<form method="post" action="{{ url_for('main.update_watchlist') }}">
+	<button class="button button--primary" type="submit"{% if active_watchlist_count == 0 %} disabled{% endif %}>Update Active Products</button>
+</form>
+<a class="button button--ghost" href="{{ url_for('main.scrape_runs') }}">Scrape Runs</a>
+{% endblock %}
+
+{% block content %}
+<section class="card watchlist-form-card">
+	<div class="section-heading">
+		<div>
+			<h2>Add Product</h2>
+			<p class="section-copy">Track a Trendyol or Hepsiburada product URL without maintaining manual text files.</p>
+		</div>
+	</div>
+
+	<form class="watchlist-form" method="post" action="{{ url_for('main.add_watchlist_item') }}">
+		<div class="form-field form-field--wide">
+			<label for="watchlist-url">Product URL</label>
+			<input id="watchlist-url" name="url" type="url" inputmode="url" placeholder="https://www.trendyol.com/..." value="{{ form_values.url }}" required>
+		</div>
+		<div class="form-field">
+			<label for="watchlist-label">Optional Label</label>
+			<input id="watchlist-label" name="label" type="text" maxlength="255" placeholder="Weekend price check" value="{{ form_values.label }}">
+		</div>
+		<div class="form-actions">
+			<button class="button button--primary" type="submit">Add to Watchlist</button>
+		</div>
+	</form>
+</section>
+
+{% if update_result %}
+<section class="card result-card">
+	<div class="section-heading">
+		<div>
+			<h2>Latest Watchlist Update</h2>
+			<p class="section-copy">The manual batch update reused the existing ScrapeRun workflow and stored item-level results.</p>
+		</div>
+		<a class="button button--secondary" href="{{ url_for('main.scrape_run_detail', run_id=update_result.run_id) }}">Open Run Detail</a>
+	</div>
+	<div class="result-grid">
+		<article class="result-stat">
+			<p class="result-label">Run ID</p>
+			<strong>{{ update_result.run_id }}</strong>
+		</article>
+		<article class="result-stat">
+			<p class="result-label">Status</p>
+			<strong><span class="run-status-badge run-status-badge--{{ update_result.status }}">{{ update_result.status.replace('_', ' ')|title }}</span></strong>
+		</article>
+		<article class="result-stat">
+			<p class="result-label">Total</p>
+			<strong>{{ update_result.total }}</strong>
+		</article>
+		<article class="result-stat">
+			<p class="result-label">Successful</p>
+			<strong>{{ update_result.successful }}</strong>
+		</article>
+		<article class="result-stat">
+			<p class="result-label">Failed</p>
+			<strong>{{ update_result.failed }}</strong>
+		</article>
+		<article class="result-stat">
+			<p class="result-label">Duration</p>
+			<strong>{{ update_result.duration }}</strong>
+		</article>
+	</div>
+</section>
+{% endif %}
+
+<section class="card data-section">
+	<div class="section-heading">
+		<div>
+			<h2>Current Watchlist</h2>
+			<p class="section-copy">{{ active_watchlist_count }} active item{% if active_watchlist_count != 1 %}s{% endif %} ready for manual batch updates.</p>
+		</div>
+	</div>
+
+	{% if watchlist_items %}
+	<div class="table-wrap">
+		<table class="data-table watchlist-table">
+			<thead>
+				<tr>
+					<th scope="col">Status</th>
+					<th scope="col">Platform</th>
+					<th scope="col">Label / Product</th>
+					<th scope="col">URL</th>
+					<th scope="col">Last Scrape</th>
+					<th scope="col">Last Result</th>
+					<th scope="col">Actions</th>
+				</tr>
+			</thead>
+			<tbody>
+				{% for item in watchlist_items %}
+				<tr>
+					<td>
+						<span class="tracking-status-badge tracking-status-badge--{{ 'active' if item.is_active else 'paused' }}">
+							{{ 'Active' if item.is_active else 'Paused' }}
+						</span>
+					</td>
+					<td><span class="{{ item.platform|platform_badge_class }}">{{ item.platform|platform_label }}</span></td>
+					<td>
+						<div class="watchlist-primary">
+							<strong>{{ item.display_name or (item.linked_listing.product_name if item.linked_listing else 'Tracked product') }}</strong>
+							{% if item.linked_listing %}
+							<a class="table-link" href="{{ url_for('main.product_detail', product_id=item.linked_listing.product_id) }}">{{ item.linked_listing.product_name }}</a>
+							<p class="table-meta">{{ item.linked_listing.current_price|format_price(item.linked_listing.currency) }}{% if item.linked_listing.seller_name %} | {{ item.linked_listing.seller_name }}{% endif %}</p>
+							{% elif item.external_product_id %}
+							<p class="table-meta">External ID {{ item.external_product_id }}</p>
+							{% endif %}
+						</div>
+					</td>
+					<td>
+						<a class="watchlist-url" href="{{ item.url }}" target="_blank" rel="noopener noreferrer">{{ item.url }}</a>
+					</td>
+					<td>{{ item.last_scraped_at|format_datetime if item.last_scraped_at else 'Not scraped yet' }}</td>
+					<td>
+						{% if item.last_scrape_status %}
+						<span class="run-status-badge run-status-badge--{{ item.last_scrape_status }}">{{ item.last_scrape_status.replace('_', ' ')|title }}</span>
+						{% if item.last_failure_reason %}
+						<p class="table-meta">{{ item.last_failure_reason }}</p>
+						{% endif %}
+						{% else %}
+						<span class="table-meta">No runs yet</span>
+						{% endif %}
+					</td>
+					<td>
+						<div class="table-actions">
+							<form method="post" action="{{ url_for('main.toggle_watchlist_item', item_id=item.id) }}">
+								<button class="button button--secondary" type="submit">{{ 'Pause' if item.is_active else 'Activate' }}</button>
+							</form>
+							<form method="post" action="{{ url_for('main.remove_watchlist_item', item_id=item.id) }}">
+								<button class="button button--ghost" type="submit">Remove</button>
+							</form>
+						</div>
+					</td>
+				</tr>
+				{% endfor %}
+			</tbody>
+		</table>
+	</div>
+	{% else %}
+	<div class="empty-state">
+		<h3>No products are being tracked yet.</h3>
+		<p>Add a Trendyol or Hepsiburada product URL to start monitoring prices.</p>
+	</div>
+	{% endif %}
+</section>
+{% endblock %}

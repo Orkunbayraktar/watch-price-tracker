@@ -238,6 +238,11 @@ h3 {
 	gap: var(--space-6);
 }
 
+.flash-stack {
+	display: grid;
+	gap: var(--space-3);
+}
+
 .card {
 	background: var(--surface);
 	border: 1px solid var(--border);
@@ -257,6 +262,12 @@ h3 {
 	border: 1px solid transparent;
 	font-weight: 700;
 	transition: background-color 120ms ease, border-color 120ms ease, color 120ms ease;
+}
+
+.button:disabled {
+	opacity: 0.5;
+	cursor: not-allowed;
+	box-shadow: none;
 }
 
 .button--primary {
@@ -554,6 +565,13 @@ h3 {
 	align-items: end;
 }
 
+.watchlist-form {
+	display: grid;
+	grid-template-columns: minmax(0, 2fr) minmax(220px, 1fr) auto;
+	gap: var(--space-4);
+	align-items: end;
+}
+
 .form-field {
 	display: grid;
 	gap: var(--space-2);
@@ -599,6 +617,62 @@ h3 {
 	background: var(--danger-soft);
 	border-color: #efb5ae;
 	color: var(--danger);
+}
+
+.page-message--success {
+	background: var(--success-soft);
+	border-color: #bce6d1;
+	color: var(--success);
+}
+
+.page-message--warning {
+	background: var(--warning-soft);
+	border-color: #f1d29a;
+	color: var(--warning);
+}
+
+.watchlist-primary {
+	display: grid;
+	gap: var(--space-2);
+}
+
+.watchlist-url {
+	color: var(--accent);
+	font-weight: 600;
+	word-break: break-word;
+}
+
+.watchlist-url:hover {
+	text-decoration: underline;
+}
+
+.table-actions {
+	display: flex;
+	gap: var(--space-3);
+	flex-wrap: wrap;
+}
+
+.tracking-status-badge {
+	display: inline-flex;
+	align-items: center;
+	min-height: 32px;
+	padding: 0 var(--space-3);
+	border-radius: 999px;
+	border: 1px solid transparent;
+	font-size: 0.8rem;
+	font-weight: 700;
+}
+
+.tracking-status-badge--active {
+	background: var(--success-soft);
+	border-color: #bce6d1;
+	color: var(--success);
+}
+
+.tracking-status-badge--paused {
+	background: var(--surface-strong);
+	border-color: var(--border);
+	color: var(--text-muted);
 }
 
 .upload-area {
@@ -923,7 +997,8 @@ h3 {
 	}
 
 	.filter-form,
-	.import-form {
+	.import-form,
+	.watchlist-form {
 		grid-template-columns: repeat(2, minmax(0, 1fr));
 	}
 
@@ -985,7 +1060,8 @@ h3 {
 	.metrics-grid--product-intelligence,
 	.detail-meta__row,
 	.filter-form,
-	.import-form {
+	.import-form,
+	.watchlist-form {
 		grid-template-columns: 1fr;
 	}
 
