@@ -49,8 +49,88 @@ FULL_HTML = """
     <span data-test-id="price-current-price">6.999,00 TL</span>
     <span data-test-id="price-old-price">7.499,90 TL</span>
     <span data-test-id="discount-rate">7%</span>
+		<span data-test-id="seller-name">Example HB Store</span>
     <span data-test-id="seller-rating">4,7</span>
   </body>
+</html>
+"""
+
+RENDERED_NAME_HTML = """
+<html>
+	<head>
+		<meta property="og:title" content="Fallback Title Should Not Win">
+		<meta itemprop="price" content="7499.90">
+	</head>
+	<body>
+		<h1 data-test-id="product-title">Casio Vintage A159WA-N1DF Kol Saati</h1>
+	</body>
+</html>
+"""
+
+RENDERED_PRICE_HTML = """
+<html>
+	<body>
+		<h1 data-test-id="product-name">Casio Vintage A159WA-N1DF Kol Saati</h1>
+		<div class="price old-price">8.199,00 TL</div>
+		<span data-test-id="price-current-price">7.499,90 TL</span>
+		<span data-test-id="price-old-price">8.199,00 TL</span>
+	</body>
+</html>
+"""
+
+JSON_LD_AGGREGATE_OFFER_HTML = """
+<html>
+	<head>
+		<script type="application/ld+json">
+			{
+				"@context": "https://schema.org",
+				"@type": "Product",
+				"name": "Casio Vintage A159WA-N1DF Kol Saati",
+				"brand": {"@type": "Brand", "name": "Casio"},
+				"offers": {
+					"@type": "AggregateOffer",
+					"lowPrice": "7.499,90",
+					"highPrice": "8.199,00",
+					"priceCurrency": "TRY",
+					"availability": "https://schema.org/InStock",
+					"priceSpecification": {
+						"@type": "PriceSpecification",
+						"price": "7.499,90"
+					}
+				}
+			}
+		</script>
+	</head>
+	<body>
+		<h1>Fallback Casio Name</h1>
+	</body>
+</html>
+"""
+
+STRUCTURED_SELLER_ONLY_HTML = """
+<html>
+	<head>
+		<script type="application/ld+json">
+			{
+				"@context": "https://schema.org",
+				"@type": "Product",
+				"name": "Casio G-SHOCK Structured Seller Test",
+				"offers": {
+					"@type": "Offer",
+					"price": "6.499,00",
+					"priceCurrency": "TRY",
+					"seller": {
+						"@type": "Organization",
+						"name": "Invisible Structured Seller"
+					}
+				}
+			}
+		</script>
+	</head>
+	<body>
+		<h1 data-test-id="product-name">Casio G-SHOCK Structured Seller Test</h1>
+		<span data-test-id="price-current-price">6.499,00 TL</span>
+	</body>
 </html>
 """
 
@@ -106,6 +186,12 @@ def test_hepsiburada_pm_url_extracts_external_product_id() -> None:
 	assert (
 		HepsiburadaScraper.extract_external_product_id(
 			"https://www.hepsiburada.com/casio-retro-kol-saati-a159wa-n1df-pm-sacsa159wan1df"
+		)
+		== "SACSA159WAN1DF"
+	)
+	assert (
+		HepsiburadaScraper.extract_external_product_id(
+			"https://www.hepsiburada.com/casio-retro-kol-saati-a159wa-n1df-pm-sacsa159wan1df?magaza=demo&merchantId=42"
 		)
 		== "SACSA159WAN1DF"
 	)
@@ -192,6 +278,46 @@ def test_hepsiburada_parse_reads_json_ld_name_and_price() -> None:
 	assert parsed.external_product_id == "HBCV0000123456"
 
 
+def test_hepsiburada_parse_reads_rendered_product_name() -> None:
+	scraper = HepsiburadaScraper()
+
+	parsed = scraper.parse_product_page(
+		RENDERED_NAME_HTML,
+		"https://www.hepsiburada.com/casio-vintage-a159wa-n1df-pm-sacsa159wan1df",
+	)
+
+	assert parsed is not None
+	assert parsed.product_name == "Casio Vintage A159WA-N1DF Kol Saati"
+	assert parsed.current_price == Decimal("7499.90")
+
+
+def test_hepsiburada_parse_reads_rendered_current_price() -> None:
+	scraper = HepsiburadaScraper()
+
+	parsed = scraper.parse_product_page(
+		RENDERED_PRICE_HTML,
+		"https://www.hepsiburada.com/casio-vintage-a159wa-n1df-pm-sacsa159wan1df",
+	)
+
+	assert parsed is not None
+	assert parsed.current_price == Decimal("7499.90")
+	assert parsed.old_price == Decimal("8199.00")
+
+
+def test_hepsiburada_parse_reads_json_ld_aggregate_offer_price() -> None:
+	scraper = HepsiburadaScraper()
+
+	parsed = scraper.parse_product_page(
+		JSON_LD_AGGREGATE_OFFER_HTML,
+		"https://www.hepsiburada.com/casio-vintage-a159wa-n1df-pm-sacsa159wan1df",
+	)
+
+	assert parsed is not None
+	assert parsed.current_price == Decimal("7499.90")
+	assert parsed.currency == "TRY"
+	assert parsed.availability == "in_stock"
+
+
 def test_hepsiburada_parse_reads_seller_when_available() -> None:
 	scraper = HepsiburadaScraper()
 
@@ -206,6 +332,18 @@ def test_hepsiburada_parse_reads_seller_when_available() -> None:
 	assert parsed.brand == "Casio"
 	assert parsed.currency == "TRY"
 	assert parsed.availability == "in_stock"
+
+
+def test_hepsiburada_structured_seller_is_ignored_when_not_visible() -> None:
+	scraper = HepsiburadaScraper()
+
+	parsed = scraper.parse_product_page(
+		STRUCTURED_SELLER_ONLY_HTML,
+		"https://www.hepsiburada.com/casio-g-shock-structured-seller-test-p-HBCV0000123456",
+	)
+
+	assert parsed is not None
+	assert parsed.seller_name is None
 
 
 def test_hepsiburada_missing_optional_fields_return_none() -> None:
@@ -223,6 +361,19 @@ def test_hepsiburada_missing_optional_fields_return_none() -> None:
 	assert parsed.seller_rating is None
 	assert parsed.availability is None
 	assert parsed.visible_sales_count is None
+
+
+def test_hepsiburada_old_price_is_not_mistaken_for_current_price() -> None:
+	scraper = HepsiburadaScraper()
+
+	parsed = scraper.parse_product_page(
+		RENDERED_PRICE_HTML,
+		"https://www.hepsiburada.com/casio-vintage-a159wa-n1df-pm-sacsa159wan1df",
+	)
+
+	assert parsed is not None
+	assert parsed.current_price == Decimal("7499.90")
+	assert parsed.current_price != parsed.old_price
 
 
 def test_scraping_service_selects_hepsiburada_scraper_from_registry() -> None:
@@ -271,3 +422,44 @@ class HepsiburadaPersistenceTests(unittest.TestCase):
 		self.assertEqual(PriceHistory.query.count(), 1)
 		self.assertEqual(Listing.query.one().platform, "hepsiburada")
 		self.assertEqual(Listing.query.one().external_product_id, "HBCV0000123456")
+
+	def test_hepsiburada_sellerless_listing_persists_with_generic_service(self) -> None:
+		scraper = HepsiburadaScraper()
+		parsed = scraper.parse_product_page(
+			MINIMAL_HTML,
+			"https://www.hepsiburada.com/casio-g-shock-minimal-p-HBCV0000123456",
+		)
+
+		self.assertIsNotNone(parsed)
+		result = save_scraped_product(parsed)
+
+		self.assertIsNotNone(result)
+		self.assertEqual(Product.query.count(), 1)
+		self.assertEqual(Seller.query.count(), 0)
+		self.assertEqual(Listing.query.count(), 1)
+		self.assertEqual(PriceHistory.query.count(), 1)
+		self.assertIsNone(Listing.query.one().seller_id)
+
+	def test_hepsiburada_second_persistence_reuses_listing_and_increments_history(self) -> None:
+		scraper = HepsiburadaScraper()
+		first = scraper.parse_product_page(
+			MINIMAL_HTML,
+			"https://www.hepsiburada.com/casio-g-shock-minimal-p-HBCV0000123456",
+		)
+		second = scraper.parse_product_page(
+			MINIMAL_HTML,
+			"https://www.hepsiburada.com/casio-g-shock-minimal-p-HBCV0000123456",
+		)
+
+		self.assertIsNotNone(first)
+		self.assertIsNotNone(second)
+		first_result = save_scraped_product(first)
+		second_result = save_scraped_product(second)
+
+		self.assertIsNotNone(first_result)
+		self.assertIsNotNone(second_result)
+		self.assertEqual(Product.query.count(), 1)
+		self.assertEqual(Seller.query.count(), 0)
+		self.assertEqual(Listing.query.count(), 1)
+		self.assertEqual(PriceHistory.query.count(), 2)
+		self.assertEqual(first_result.listing.id, second_result.listing.id)

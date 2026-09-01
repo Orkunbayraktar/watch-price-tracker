@@ -304,8 +304,8 @@ class ProductPageScraper(BaseScraper):
 				url,
 				", ".join(missing_critical_fields),
 			)
-			if self.debug_parser and "current_price" in missing_critical_fields:
-				self._log_price_debug_context(soup, structured_product, offers, url)
+			if self.debug_parser and {"current_price", "product_name"}.intersection(missing_critical_fields):
+				self._log_parser_debug_context(soup, structured_product, offers, url)
 			self._set_failure(
 				"invalid_data",
 				f"Missing critical parsed fields: {', '.join(missing_critical_fields)}.",
@@ -362,7 +362,7 @@ class ProductPageScraper(BaseScraper):
 		if meta_price is not None:
 			return meta_price
 
-		return self.normalize_money(self._select_first_text(soup, self.CURRENT_PRICE_SELECTORS))
+		return self._extract_price_from_selectors(soup, self.CURRENT_PRICE_SELECTORS, skip_old_price_candidates=True)
 
 	def _extract_old_price(self, soup: BeautifulSoup, offers: dict[str, Any] | None) -> Decimal | None:
 		if offers:
@@ -451,10 +451,7 @@ class ProductPageScraper(BaseScraper):
 			matching_offer = self._select_matching_offer(offers, url)
 			if matching_offer is not None:
 				return matching_offer
-			for candidate in offers:
-				if isinstance(candidate, dict):
-					return candidate
-			return None
+			return self._select_best_offer_candidate(offers)
 
 		if isinstance(offers, dict):
 			return offers
@@ -508,7 +505,15 @@ class ProductPageScraper(BaseScraper):
 			if price is not None:
 				return price
 
-		for element in soup.select("meta[itemprop='price'], [itemprop='price']"):
+		for element in soup.select("meta[itemprop='price']"):
+			value = element.get("content") if element.has_attr("content") else element.get_text(" ", strip=True)
+			price = self.normalize_money(value)
+			if price is not None:
+				return price
+
+		for element in soup.select("[itemprop='price']"):
+			if self._is_old_price_element(element):
+				continue
 			value = element.get("content") if element.has_attr("content") else element.get_text(" ", strip=True)
 			price = self.normalize_money(value)
 			if price is not None:
@@ -539,6 +544,36 @@ class ProductPageScraper(BaseScraper):
 			if url is not None and self._candidate_matches_url(candidate, url):
 				return candidate
 		return None
+
+	def _select_best_offer_candidate(self, offers: list[Any]) -> dict[str, Any] | None:
+		scored_candidates: list[tuple[int, dict[str, Any]]] = []
+		fallback_candidate: dict[str, Any] | None = None
+		for candidate in offers:
+			if not isinstance(candidate, dict):
+				continue
+			if fallback_candidate is None:
+				fallback_candidate = candidate
+			score = self._score_offer_candidate(candidate)
+			if score is None:
+				continue
+			scored_candidates.append((score, candidate))
+
+		if scored_candidates:
+			scored_candidates.sort(key=lambda item: item[0])
+			return scored_candidates[0][1]
+
+		return fallback_candidate
+
+	def _score_offer_candidate(self, candidate: dict[str, Any]) -> int | None:
+		types = self._normalize_json_ld_types(candidate.get("@type"))
+		has_price_signal = any(candidate.get(key) is not None for key in ("price", "lowPrice", "highPrice", "priceSpecification", "offers"))
+		if not has_price_signal:
+			return None
+		if "offer" in types:
+			return 0
+		if "aggregateoffer" in types:
+			return 1
+		return 2
 
 	@staticmethod
 	def _normalize_json_ld_types(value: Any) -> set[str]:
@@ -602,6 +637,50 @@ class ProductPageScraper(BaseScraper):
 
 		return None
 
+	def _extract_price_from_selectors(
+		self,
+		soup: BeautifulSoup,
+		selectors: tuple[str, ...],
+		*,
+		skip_old_price_candidates: bool,
+	) -> Decimal | None:
+		for selector in selectors:
+			for element in soup.select(selector):
+				if skip_old_price_candidates and self._is_old_price_element(element):
+					continue
+				text = element.get_text(" ", strip=True)
+				if not text:
+					continue
+				price = self.normalize_money(text)
+				if price is not None:
+					return price
+		return None
+
+	def _is_old_price_element(self, element: Any) -> bool:
+		markers = (
+			"old-price",
+			"price-old",
+			"crossed",
+			"strik",
+			"original-price",
+			"before-discount",
+			"former-price",
+		)
+		for candidate in [element, *list(element.parents)]:
+			if getattr(candidate, "name", None) in {"del", "s", "strike"}:
+				return True
+			attribute_values: list[str] = []
+			for attribute_name in ("class", "id", "data-test-id", "data-testid"):
+				attribute_value = candidate.get(attribute_name)
+				if isinstance(attribute_value, list):
+					attribute_values.extend(str(item).lower() for item in attribute_value)
+				elif isinstance(attribute_value, str):
+					attribute_values.append(attribute_value.lower())
+			combined = " ".join(attribute_values)
+			if any(marker in combined for marker in markers):
+				return True
+		return False
+
 	@staticmethod
 	def _normalize_availability(value: Any) -> str | None:
 		if not isinstance(value, str) or not value.strip():
@@ -638,14 +717,14 @@ class ProductPageScraper(BaseScraper):
 		soup = BeautifulSoup(fetch_result.html, "html.parser")
 		return self._looks_like_block_page(soup)
 
-	def _log_price_debug_context(
+	def _log_parser_debug_context(
 		self,
 		soup: BeautifulSoup,
 		structured_product: dict[str, Any] | None,
 		offers: dict[str, Any] | None,
 		url: str,
 	) -> None:
-		logger.info("Parser debug for %s current_price extraction on %s", self.platform, url)
+		logger.info("Parser debug for %s critical extraction on %s", self.platform, url)
 		if structured_product is not None:
 			logger.info(
 				"Structured product candidate: type=%s name=%s",
@@ -670,6 +749,10 @@ class ProductPageScraper(BaseScraper):
 		if meta_matches:
 			logger.info("Price-related meta/itemprop matches: %s", " | ".join(meta_matches))
 
+		name_matches = self._collect_debug_name_matches(soup)
+		if name_matches:
+			logger.info("Name selector matches: %s", " | ".join(name_matches))
+
 	def _collect_debug_selector_matches(self, soup: BeautifulSoup, selectors: tuple[str, ...]) -> list[str]:
 		matches: list[str] = []
 		for selector in selectors:
@@ -692,6 +775,20 @@ class ProductPageScraper(BaseScraper):
 				value = meta.get_text(" ", strip=True)
 			if isinstance(value, str) and value.strip():
 				results.append(f"{name}={value[:120]}")
+		return results[:8]
+
+	def _collect_debug_name_matches(self, soup: BeautifulSoup) -> list[str]:
+		results = self._collect_debug_selector_matches(soup, self.PRODUCT_NAME_SELECTORS)
+		og_title = self._extract_meta_content(soup, "og:title")
+		if og_title:
+			results.append(f"og:title={og_title[:120]}")
+		for element in soup.select("meta[itemprop='name'], [itemprop='name']"):
+			if element.name == "meta":
+				value = element.get("content")
+			else:
+				value = element.get_text(" ", strip=True)
+			if isinstance(value, str) and value.strip():
+				results.append(f"itemprop:name={value[:120]}")
 		return results[:8]
 
 	def _set_failure(self, reason: str, details: str) -> None:

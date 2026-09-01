@@ -64,18 +64,19 @@ HEPSIBURADA_HTML = """
         "name": "Casio Retro Kol Saati A159WA",
         "brand": {"@type": "Brand", "name": "Casio"},
         "offers": {
-          "@type": "Offer",
-          "price": "6.999,00",
+					"@type": "AggregateOffer",
+					"lowPrice": "7.499,90",
+					"highPrice": "8.199,00",
           "priceCurrency": "TRY",
-          "availability": "https://schema.org/InStock",
-          "seller": {"@type": "Organization", "name": "HB Store"}
+					"availability": "https://schema.org/InStock"
         }
       }
     </script>
   </head>
   <body>
     <h1 data-test-id="product-name">Casio Retro Kol Saati A159WA</h1>
-    <span data-test-id="price-current-price">6.999,00 TL</span>
+		<span data-test-id="price-old-price">8.199,00 TL</span>
+		<span data-test-id="price-current-price">7.499,90 TL</span>
   </body>
 </html>
 """
@@ -291,6 +292,7 @@ def build_allowed_robots_manager() -> Mock:
 	parser = Mock()
 	parser.can_fetch.return_value = True
 	robots_manager.load_rules.return_value = parser
+	robots_manager.get_crawl_delay.return_value = 0
 	return robots_manager
 
 
@@ -303,6 +305,21 @@ def test_robots_denied_prevents_browser_launch() -> None:
 	scraper = TrendyolScraper(robots_manager=robots_manager, fetchers={"playwright": browser_fetcher})
 
 	result = scraper.scrape_product(TRENDYOL_URL, fetch_strategy="playwright")
+
+	assert result is None
+	assert scraper.last_failure_reason == "robots_denied"
+	assert browser_fetcher.calls == []
+
+
+def test_hepsiburada_robots_denied_prevents_browser_launch() -> None:
+	robots_manager = Mock()
+	parser = Mock()
+	parser.can_fetch.return_value = False
+	robots_manager.load_rules.return_value = parser
+	browser_fetcher = FakeFetcher(result=FetchResult(html=HEPSIBURADA_HTML, final_url=HEPSIBURADA_URL))
+	scraper = HepsiburadaScraper(robots_manager=robots_manager, fetchers={"playwright": browser_fetcher})
+
+	result = scraper.scrape_product(HEPSIBURADA_URL, fetch_strategy="playwright")
 
 	assert result is None
 	assert scraper.last_failure_reason == "robots_denied"
@@ -379,6 +396,40 @@ def test_successful_playwright_dto_uses_existing_persistence(app_context) -> Non
 	assert Listing.query.count() == 1
 	assert PriceHistory.query.count() == 1
 	assert Listing.query.one().external_product_id == "33139591"
+
+
+def test_successful_hepsiburada_playwright_dto_uses_existing_sellerless_persistence(app_context) -> None:
+	robots_manager = build_allowed_robots_manager()
+	browser_fetcher = FakeFetcher(result=FetchResult(html=HEPSIBURADA_HTML, final_url=HEPSIBURADA_URL, page_title="Hepsiburada Product"))
+	scraper = HepsiburadaScraper(robots_manager=robots_manager, fetchers={"playwright": browser_fetcher})
+
+	result = scrape_and_save_product(HEPSIBURADA_URL, scraper=scraper, fetch_strategy="playwright")
+
+	assert result is not None
+	assert Product.query.count() == 1
+	assert Seller.query.count() == 0
+	assert Listing.query.count() == 1
+	assert PriceHistory.query.count() == 1
+	assert Listing.query.one().external_product_id == "SACSA159WAN1DF"
+	assert Listing.query.one().current_price == Decimal("7499.90")
+	assert Listing.query.one().seller_id is None
+
+
+def test_second_hepsiburada_playwright_save_reuses_listing_and_increments_history(app_context) -> None:
+	robots_manager = build_allowed_robots_manager()
+	browser_fetcher = FakeFetcher(result=FetchResult(html=HEPSIBURADA_HTML, final_url=HEPSIBURADA_URL, page_title="Hepsiburada Product"))
+	scraper = HepsiburadaScraper(robots_manager=robots_manager, fetchers={"playwright": browser_fetcher})
+
+	first = scrape_and_save_product(HEPSIBURADA_URL, scraper=scraper, fetch_strategy="playwright")
+	second = scrape_and_save_product(HEPSIBURADA_URL, scraper=scraper, fetch_strategy="playwright")
+
+	assert first is not None
+	assert second is not None
+	assert Product.query.count() == 1
+	assert Seller.query.count() == 0
+	assert Listing.query.count() == 1
+	assert PriceHistory.query.count() == 2
+	assert first.listing.id == second.listing.id
 
 
 def test_requests_fetch_strategy_still_works() -> None:

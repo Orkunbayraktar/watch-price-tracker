@@ -116,6 +116,9 @@ This project does not attempt to bypass platform protections, fake browser ident
 - Existing `robots.txt` checks still run before any product request. If robots access is denied or robots loading fails, the browser is not launched.
 - Browser mode uses normal Playwright Chromium only. No stealth plugin, CAPTCHA solving, proxy rotation, fingerprint spoofing, or private marketplace API replay is implemented.
 - Challenge and blocking pages are detected and reported as structured failures. The project does not try to solve or bypass those pages.
+- Both marketplaces use the same generic live path: robots.txt gate -> fetcher -> rendered HTML parser -> `ScrapedProductData` -> generic persistence -> SQLite.
+- Hepsiburada Playwright support stays inside that shared flow. The Hepsiburada parser can persist seller-less listings when the public product page does not visibly expose seller information.
+- A concrete Hepsiburada live success should only be claimed after you run the manual smoke test locally against a real product URL.
 - Marketplace pages may still block anonymous browser automation even when a normal browser renderer is used.
 - CSV and XLSX import remain supported as a stable fallback data source when live acquisition is blocked.
 
