@@ -62,7 +62,7 @@ class Seller(db.Model):
 
 
 class Listing(db.Model):
-	"""Marketplace listing for a product sold by a seller."""
+	"""Marketplace listing for a product with an optional known seller."""
 
 	__tablename__ = "listings"
 	__table_args__ = (

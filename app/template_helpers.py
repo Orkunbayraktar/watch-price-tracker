@@ -20,16 +20,27 @@ def register_template_helpers(app: Flask) -> None:
 
 	@app.template_filter("format_price")
 	def format_price(value: Decimal | int | float | None, currency: str = "TRY") -> str:
-		if value is None:
-			return "Not available"
-		if not isinstance(value, Decimal):
-			value = Decimal(str(value))
+		return _format_price_text(value, currency)
 
-		quantized = value.quantize(Decimal("0.01"))
+	@app.template_filter("format_signed_price")
+	def format_signed_price(value: Decimal | int | float | None, currency: str = "TRY") -> str:
+		decimal_value = _coerce_decimal(value)
+		if decimal_value is None:
+			return "Not available"
+		if decimal_value > 0:
+			return f"+{_format_price_text(decimal_value, currency)}"
+		return _format_price_text(decimal_value, currency)
+
+	@app.template_filter("format_percentage")
+	def format_percentage(value: Decimal | int | float | None, always_sign: bool = False) -> str:
+		decimal_value = _coerce_decimal(value)
+		if decimal_value is None:
+			return "Not available"
+		quantized = decimal_value.quantize(Decimal("0.01"))
 		formatted = f"{quantized:,.2f}".replace(",", "_").replace(".", ",").replace("_", ".")
-		if currency.upper() == "TRY":
-			return f"{formatted} TL"
-		return f"{formatted} {currency.upper()}"
+		if always_sign and quantized > 0:
+			return f"+{formatted}%"
+		return f"{formatted}%"
 
 	@app.template_filter("format_datetime")
 	def format_datetime(value: datetime | None) -> str:
@@ -56,12 +67,40 @@ def register_template_helpers(app: Flask) -> None:
 			return "platform-badge platform-badge--hepsiburada"
 		return "platform-badge platform-badge--other"
 
+	@app.template_filter("change_direction")
+	def change_direction(value: Decimal | int | float | None) -> str:
+		decimal_value = _coerce_decimal(value)
+		if decimal_value is None or decimal_value == 0:
+			return "neutral"
+		if decimal_value < 0:
+			return "decrease"
+		return "increase"
+
 	@app.context_processor
 	def inject_template_helpers() -> dict[str, object]:
 		return {
 			"merge_query_params": merge_query_params,
 			"is_active_nav": is_active_nav,
 		}
+
+
+def _format_price_text(value: Decimal | int | float | None, currency: str = "TRY") -> str:
+	decimal_value = _coerce_decimal(value)
+	if decimal_value is None:
+		return "Not available"
+	quantized = decimal_value.quantize(Decimal("0.01"))
+	formatted = f"{quantized:,.2f}".replace(",", "_").replace(".", ",").replace("_", ".")
+	if currency.upper() == "TRY":
+		return f"{formatted} TL"
+	return f"{formatted} {currency.upper()}"
+
+
+def _coerce_decimal(value: Decimal | int | float | None) -> Decimal | None:
+	if value is None:
+		return None
+	if isinstance(value, Decimal):
+		return value
+	return Decimal(str(value))
 
 
 def merge_query_params(**updates: object) -> str:

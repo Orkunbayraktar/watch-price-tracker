@@ -19,5 +19,6 @@ class Config:
 	DEFAULT_REQUEST_DELAY = 5
 	ROBOTS_TIMEOUT = 5
 	REQUEST_TIMEOUT = 10
+	PLAYWRIGHT_TIMEOUT = 20
 	IMPORT_PREVIEW_LIMIT = 20
 	IMPORT_STATE_DIR = Path(tempfile.gettempdir()) / "watch-price-tracker-imports"

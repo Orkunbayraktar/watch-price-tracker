@@ -219,9 +219,11 @@ def test_product_detail_loads(client) -> None:
 	body = response.get_data(as_text=True)
 
 	assert response.status_code == 200
-	assert "Current Marketplace Listings" in body
 	assert "Price History" in body
-	assert "Lowest price" in body
+	assert "Seller Comparison" in body
+	assert "Observation History" in body
+	assert "Price History" in body
+	assert "Selected Series" in body
 
 
 def test_invalid_product_id_returns_404(client) -> None:

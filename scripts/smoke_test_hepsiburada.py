@@ -20,7 +20,7 @@ def main() -> int:
 	"""CLI entry point for the Hepsiburada smoke test script."""
 	logging.basicConfig(level=logging.INFO, format="%(levelname)s %(name)s: %(message)s")
 	args = build_smoke_argument_parser("Hepsiburada").parse_args()
-	return run_smoke_test(args.url, HepsiburadaScraper, "Hepsiburada")
+	return run_smoke_test(args.url, HepsiburadaScraper, "Hepsiburada", debug_parser=args.debug_parser)
 
 
 if __name__ == "__main__":

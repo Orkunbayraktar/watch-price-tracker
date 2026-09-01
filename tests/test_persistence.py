@@ -136,11 +136,57 @@ class PersistenceServiceTests(unittest.TestCase):
 
 		listing = Listing.query.one()
 		self.assertIsNotNone(result)
+		self.assertIsNone(result.seller)
 		self.assertEqual(Seller.query.count(), 0)
 		self.assertIsNone(listing.seller_id)
+		self.assertIsNone(listing.seller)
 		self.assertEqual(PriceHistory.query.count(), 1)
 
-	def test_missing_seller_later_reuses_existing_listing_for_same_url(self) -> None:
+	def test_missing_seller_does_not_create_fake_seller(self) -> None:
+		save_scraped_product(self._make_data(seller_name=None, seller_rating=None))
+
+		self.assertEqual(Seller.query.count(), 0)
+
+	def test_same_sellerless_listing_twice_creates_one_listing(self) -> None:
+		first = save_scraped_product(self._make_data(seller_name=None, seller_rating=None))
+		second = save_scraped_product(
+			self._make_data(
+				seller_name=None,
+				seller_rating=None,
+				current_price=Decimal("7399.90"),
+				scraped_at=first.price_history.recorded_at + timedelta(hours=1),
+			)
+		)
+
+		listing = Listing.query.one()
+		self.assertIsNotNone(second)
+		self.assertEqual(Listing.query.count(), 1)
+		self.assertEqual(Seller.query.count(), 0)
+		self.assertEqual(listing.id, first.listing.id)
+		self.assertIsNone(listing.seller_id)
+		self.assertEqual(listing.current_price, Decimal("7399.90"))
+		self.assertEqual(PriceHistory.query.count(), 2)
+
+	def test_later_seller_attaches_to_existing_sellerless_listing(self) -> None:
+		first = save_scraped_product(self._make_data(seller_name=None, seller_rating=None))
+		second = save_scraped_product(
+			self._make_data(
+				seller_name="Example Watch Store",
+				seller_rating=Decimal("4.80"),
+				scraped_at=first.price_history.recorded_at + timedelta(hours=1),
+			)
+		)
+
+		listing = Listing.query.one()
+		self.assertIsNotNone(second)
+		self.assertEqual(Listing.query.count(), 1)
+		self.assertEqual(Seller.query.count(), 1)
+		self.assertEqual(listing.id, first.listing.id)
+		self.assertIsNotNone(listing.seller_id)
+		self.assertEqual(listing.seller.name, "Example Watch Store")
+		self.assertEqual(PriceHistory.query.count(), 2)
+
+	def test_missing_seller_after_known_seller_reuses_listing_and_clears_seller(self) -> None:
 		first = save_scraped_product(self._make_data())
 		second = save_scraped_product(
 			self._make_data(
@@ -155,6 +201,7 @@ class PersistenceServiceTests(unittest.TestCase):
 		self.assertEqual(Listing.query.count(), 1)
 		self.assertEqual(Seller.query.count(), 1)
 		self.assertEqual(listing.id, first.listing.id)
+		self.assertIsNone(listing.seller_id)
 		self.assertEqual(PriceHistory.query.count(), 2)
 
 	def test_scrape_and_save_product_does_not_write_when_scraper_returns_none(self) -> None:

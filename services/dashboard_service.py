@@ -10,6 +10,7 @@ from sqlalchemy import func
 
 from database.db import db
 from database.models import Listing, PriceHistory, Product, Seller
+from services.price_analysis_service import DashboardPriceIntelligence, get_dashboard_price_intelligence
 
 
 @dataclass(slots=True)
@@ -65,6 +66,7 @@ class DashboardData:
 	recent_price_observations: list[RecentPriceObservationItem]
 	recent_listings: list[RecentListingItem]
 	marketplace_breakdown: list[MarketplaceBreakdownItem]
+	price_intelligence: DashboardPriceIntelligence
 
 
 def get_dashboard_data(observation_limit: int = 8, listing_limit: int = 8) -> DashboardData:
@@ -158,4 +160,5 @@ def get_dashboard_data(observation_limit: int = 8, listing_limit: int = 8) -> Da
 		recent_price_observations=recent_observations,
 		recent_listings=recent_listings,
 		marketplace_breakdown=marketplace_breakdown,
+		price_intelligence=get_dashboard_price_intelligence(),
 	)

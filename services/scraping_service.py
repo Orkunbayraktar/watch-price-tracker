@@ -29,8 +29,14 @@ def create_scraper_for_url(url: str) -> ProductPageScraper | None:
 	return None
 
 
-def scrape_product(url: str, scraper: ProductPageScraper | None = None) -> ScrapedProductData | None:
-	"""Scrape a single supported product URL and return normalized data."""
+def scrape_product_with_strategy(
+	url: str,
+	*,
+	scraper: ProductPageScraper | None = None,
+	fetch_strategy: str = "requests",
+	headed: bool = False,
+) -> ScrapedProductData | None:
+	"""Scrape a single supported product URL with an explicit fetch strategy."""
 	working_scraper = scraper or create_scraper_for_url(url)
 	if working_scraper is None:
 		logger.warning("No scraper available for URL: %s", url)
@@ -40,15 +46,36 @@ def scrape_product(url: str, scraper: ProductPageScraper | None = None) -> Scrap
 		logger.warning("No scraper available for URL: %s", url)
 		return None
 
-	return working_scraper.scrape_product(url)
+	if fetch_strategy == "requests" and headed is False:
+		return working_scraper.scrape_product(url)
+	return working_scraper.scrape_product(url, fetch_strategy=fetch_strategy, headed=headed)
+
+
+def scrape_product(
+	url: str,
+	scraper: ProductPageScraper | None = None,
+	*,
+	fetch_strategy: str = "requests",
+	headed: bool = False,
+) -> ScrapedProductData | None:
+	"""Scrape a single supported product URL and return normalized data."""
+	return scrape_product_with_strategy(
+		url,
+		scraper=scraper,
+		fetch_strategy=fetch_strategy,
+		headed=headed,
+	)
 
 
 def scrape_and_save_product(
 	url: str,
 	scraper: ProductPageScraper | None = None,
+	*,
+	fetch_strategy: str = "requests",
+	headed: bool = False,
 ) -> PersistenceResult | None:
 	"""Scrape a single supported product URL and persist the normalized result."""
-	scraped_data = scrape_product(url, scraper=scraper)
+	scraped_data = scrape_product(url, scraper=scraper, fetch_strategy=fetch_strategy, headed=headed)
 	if scraped_data is None:
 		return None
 

@@ -16,10 +16,14 @@ from requests import Session
 
 from config.settings import Config
 from scrapers.base_scraper import BaseScraper
+from scrapers.fetchers import BaseFetcher, FetchResult, FetcherError, PlaywrightFetcher, RequestsFetcher
 from scrapers.models import ScrapedProductData
 
 
 logger = logging.getLogger(__name__)
+
+
+ALLOWED_FETCH_STRATEGIES = {"requests", "playwright"}
 
 
 class ProductPageScraper(BaseScraper):
@@ -44,6 +48,8 @@ class ProductPageScraper(BaseScraper):
 		user_agent: str | None = None,
 		default_request_delay: int | float | None = None,
 		session: Session | None = None,
+		fetchers: dict[str, BaseFetcher] | None = None,
+		debug_parser: bool = False,
 	) -> None:
 		super().__init__(
 			robots_manager=robots_manager,
@@ -52,6 +58,14 @@ class ProductPageScraper(BaseScraper):
 		)
 		self.session = session or requests.Session()
 		self.session.headers.setdefault("User-Agent", self.user_agent)
+		default_fetchers: dict[str, BaseFetcher] = {
+			"requests": RequestsFetcher(self.session),
+			"playwright": PlaywrightFetcher(),
+		}
+		if fetchers:
+			default_fetchers.update(fetchers)
+		self.fetchers = default_fetchers
+		self.debug_parser = debug_parser
 		self.last_failure_reason: str | None = None
 		self.last_failure_details: str | None = None
 
@@ -154,7 +168,13 @@ class ProductPageScraper(BaseScraper):
 
 		return None
 
-	def scrape_product(self, url: str) -> ScrapedProductData | None:
+	def scrape_product(
+		self,
+		url: str,
+		*,
+		fetch_strategy: str = "requests",
+		headed: bool = False,
+	) -> ScrapedProductData | None:
 		"""Fetch and parse a single product page."""
 		self._clear_failure_state()
 		if not self.is_supported_url(url):
@@ -163,17 +183,30 @@ class ProductPageScraper(BaseScraper):
 			return None
 
 		logger.info("Starting %s scrape for %s", self.platform, url)
-		html = self.fetch_product_page(url)
+		html = self.fetch_product_page(url, fetch_strategy=fetch_strategy, headed=headed)
 		if html is None:
 			return None
 
 		return self.parse_product_page(html, url)
 
-	def fetch_product_page(self, url: str) -> str | None:
+	def fetch_product_page(
+		self,
+		url: str,
+		*,
+		fetch_strategy: str = "requests",
+		headed: bool = False,
+	) -> str | None:
 		"""Fetch a product page after robots.txt approval."""
 		if not self.is_supported_url(url):
 			logger.warning("Rejected unsupported %s URL: %s", self.platform, url)
 			self._set_failure("unsupported_url", "The provided URL is not a supported product URL for this platform.")
+			return None
+
+		if fetch_strategy not in ALLOWED_FETCH_STRATEGIES:
+			self._set_failure(
+				"invalid_fetch_strategy",
+				f"Unsupported fetch strategy: {fetch_strategy}. Allowed values are: requests, playwright.",
+			)
 			return None
 
 		parser = self.robots_manager.load_rules(url)
@@ -189,31 +222,41 @@ class ProductPageScraper(BaseScraper):
 
 		self.wait_for_request_slot(url)
 		self.mark_request_started()
+		fetcher = self.fetchers.get(fetch_strategy)
+		if fetcher is None:
+			self._set_failure(
+				"invalid_fetch_strategy",
+				f"No fetcher is configured for strategy: {fetch_strategy}.",
+			)
+			return None
 
 		try:
-			response = self.session.get(url, timeout=Config.REQUEST_TIMEOUT)
-			response.raise_for_status()
-		except requests.Timeout as error:
-			logger.warning("Request timed out for %s: %s", url, error)
-			self._set_failure("timeout", "The request timed out before a response was received.")
+			fetch_result = fetcher.fetch(
+				url,
+				user_agent=self.user_agent,
+				timeout_seconds=Config.PLAYWRIGHT_TIMEOUT if fetch_strategy == "playwright" else Config.REQUEST_TIMEOUT,
+				headless=not headed,
+			)
+		except FetcherError as error:
+			logger.warning("%s fetch failed for %s: %s", fetch_strategy, url, error.details)
+			self._set_failure(error.reason, error.details)
 			return None
-		except requests.HTTPError as error:
-			logger.warning("HTTP error while fetching %s: %s", url, error)
-			status_code = error.response.status_code if error.response is not None else None
-			if status_code == 403:
-				self._set_failure("http_forbidden", "The server returned HTTP 403 and blocked the request.")
-			elif status_code == 429:
-				self._set_failure("rate_limited", "The server returned HTTP 429 due to rate limiting.")
+
+		if self._is_platform_blocked(fetch_result):
+			if fetch_result.status_code in {403, 429}:
+				self._set_failure(
+					"blocked_by_platform",
+					f"The platform blocked browser navigation with HTTP {fetch_result.status_code}.",
+				)
 			else:
-				self._set_failure("http_error", f"The server returned an HTTP error: {status_code or 'unknown'}.")
-			return None
-		except requests.RequestException as error:
-			logger.warning("Request failed for %s: %s", url, error)
-			self._set_failure("request_failed", "The HTTP request failed before valid HTML could be retrieved.")
+				self._set_failure(
+					"challenge_detected",
+					"The product page appears to be an access-denied, CAPTCHA, or bot-challenge page.",
+				)
 			return None
 
 		logger.info("Fetched %s product page successfully: %s", self.platform, url)
-		return response.text
+		return fetch_result.html
 
 	def parse_product_page(self, html: str, url: str) -> ScrapedProductData | None:
 		"""Parse a product page into normalized Python data."""
@@ -221,12 +264,12 @@ class ProductPageScraper(BaseScraper):
 		soup = BeautifulSoup(html, "html.parser")
 		if self._looks_like_block_page(soup):
 			logger.warning("Probable anti-bot or verification page received for %s", url)
-			self._set_failure("parse_failed", "The response looks like a bot-protection or verification page.")
+			self._set_failure("challenge_detected", "The response looks like a bot-protection, CAPTCHA, or access-denied page.")
 			return None
 
 		try:
-			structured_product = self._extract_structured_product(soup)
-			offers = self._extract_offer_data(structured_product)
+			structured_product = self._extract_structured_product(soup, url)
+			offers = self._extract_offer_data(structured_product, url)
 			product_name = self._extract_product_name(soup, structured_product)
 			parsed_data = ScrapedProductData(
 				platform=self.platform,
@@ -261,6 +304,8 @@ class ProductPageScraper(BaseScraper):
 				url,
 				", ".join(missing_critical_fields),
 			)
+			if self.debug_parser and "current_price" in missing_critical_fields:
+				self._log_price_debug_context(soup, structured_product, offers, url)
 			self._set_failure(
 				"invalid_data",
 				f"Missing critical parsed fields: {', '.join(missing_critical_fields)}.",
@@ -309,9 +354,13 @@ class ProductPageScraper(BaseScraper):
 
 	def _extract_current_price(self, soup: BeautifulSoup, offers: dict[str, Any] | None) -> Decimal | None:
 		if offers:
-			price = self.normalize_money(self._extract_offer_value(offers, "price"))
+			price = self._extract_price_from_offer(offers)
 			if price is not None:
 				return price
+
+		meta_price = self._extract_public_meta_price(soup)
+		if meta_price is not None:
+			return meta_price
 
 		return self.normalize_money(self._select_first_text(soup, self.CURRENT_PRICE_SELECTORS))
 
@@ -359,7 +408,11 @@ class ProductPageScraper(BaseScraper):
 
 		return self._normalize_availability(self._select_first_text(soup, self.AVAILABILITY_SELECTORS))
 
-	def _extract_structured_product(self, soup: BeautifulSoup) -> dict[str, Any] | None:
+	def _extract_structured_product(self, soup: BeautifulSoup, url: str | None = None) -> dict[str, Any] | None:
+		matching_candidates: list[tuple[int, dict[str, Any]]] = []
+		fallback_candidates: list[tuple[int, dict[str, Any]]] = []
+		preferred_types = {"product", "productgroup"}
+
 		for script_tag in soup.select("script[type='application/ld+json']"):
 			raw_payload = script_tag.string or script_tag.get_text(strip=True)
 			if not raw_payload:
@@ -371,19 +424,33 @@ class ProductPageScraper(BaseScraper):
 				continue
 
 			for candidate in self._iter_json_ld_nodes(payload):
-				type_value = candidate.get("@type")
-				types = type_value if isinstance(type_value, list) else [type_value]
-				if any(item == "Product" for item in types):
-					return candidate
+				types = self._normalize_json_ld_types(candidate.get("@type"))
+				if not types.intersection(preferred_types):
+					continue
+
+				priority = 0 if "product" in types else 1
+				fallback_candidates.append((priority, candidate))
+				if url is not None and self._candidate_matches_url(candidate, url):
+					matching_candidates.append((priority, candidate))
+
+		if matching_candidates:
+			matching_candidates.sort(key=lambda item: item[0])
+			return matching_candidates[0][1]
+		if fallback_candidates:
+			fallback_candidates.sort(key=lambda item: item[0])
+			return fallback_candidates[0][1]
 
 		return None
 
-	def _extract_offer_data(self, structured_product: dict[str, Any] | None) -> dict[str, Any] | None:
+	def _extract_offer_data(self, structured_product: dict[str, Any] | None, url: str | None = None) -> dict[str, Any] | None:
 		if not structured_product:
 			return None
 
 		offers = structured_product.get("offers")
 		if isinstance(offers, list):
+			matching_offer = self._select_matching_offer(offers, url)
+			if matching_offer is not None:
+				return matching_offer
 			for candidate in offers:
 				if isinstance(candidate, dict):
 					return candidate
@@ -391,6 +458,61 @@ class ProductPageScraper(BaseScraper):
 
 		if isinstance(offers, dict):
 			return offers
+
+		return None
+
+	def _extract_price_from_offer(self, offers: dict[str, Any] | None) -> Decimal | None:
+		if not isinstance(offers, dict):
+			return None
+
+		for key in ("price", "lowPrice"):
+			price = self.normalize_money(self._extract_offer_value(offers, key))
+			if price is not None:
+				return price
+
+		price = self._extract_price_from_price_specification(offers.get("priceSpecification"))
+		if price is not None:
+			return price
+
+		nested_offers = offers.get("offers")
+		if isinstance(nested_offers, dict):
+			return self._extract_price_from_offer(nested_offers)
+		if isinstance(nested_offers, list):
+			for candidate in nested_offers:
+				price = self._extract_price_from_offer(candidate if isinstance(candidate, dict) else None)
+				if price is not None:
+					return price
+
+		return None
+
+	def _extract_price_from_price_specification(self, value: Any) -> Decimal | None:
+		if isinstance(value, list):
+			for candidate in value:
+				price = self._extract_price_from_price_specification(candidate)
+				if price is not None:
+					return price
+			return None
+
+		if isinstance(value, dict):
+			for key in ("price", "minPrice", "maxPrice"):
+				price = self.normalize_money(value.get(key))
+				if price is not None:
+					return price
+			return None
+
+		return self.normalize_money(value)
+
+	def _extract_public_meta_price(self, soup: BeautifulSoup) -> Decimal | None:
+		for property_name in ("product:price:amount", "og:price:amount"):
+			price = self.normalize_money(self._extract_meta_content(soup, property_name))
+			if price is not None:
+				return price
+
+		for element in soup.select("meta[itemprop='price'], [itemprop='price']"):
+			value = element.get("content") if element.has_attr("content") else element.get_text(" ", strip=True)
+			price = self.normalize_money(value)
+			if price is not None:
+				return price
 
 		return None
 
@@ -409,6 +531,44 @@ class ProductPageScraper(BaseScraper):
 					results.extend(self._iter_json_ld_nodes(item))
 
 		return results
+
+	def _select_matching_offer(self, offers: list[Any], url: str | None) -> dict[str, Any] | None:
+		for candidate in offers:
+			if not isinstance(candidate, dict):
+				continue
+			if url is not None and self._candidate_matches_url(candidate, url):
+				return candidate
+		return None
+
+	@staticmethod
+	def _normalize_json_ld_types(value: Any) -> set[str]:
+		if isinstance(value, list):
+			return {str(item).strip().lower() for item in value if str(item).strip()}
+		if value is None:
+			return set()
+		text = str(value).strip()
+		return {text.lower()} if text else set()
+
+	def _candidate_matches_url(self, candidate: dict[str, Any], url: str) -> bool:
+		reference_url = self._normalize_comparable_url(url)
+		candidate_urls = [
+			candidate.get("url"),
+			candidate.get("@id"),
+		]
+		offers = candidate.get("offers")
+		if isinstance(offers, dict):
+			candidate_urls.append(offers.get("url"))
+
+		for candidate_url in candidate_urls:
+			if isinstance(candidate_url, str) and self._normalize_comparable_url(candidate_url) == reference_url:
+				return True
+		return False
+
+	@staticmethod
+	def _normalize_comparable_url(url: str) -> str:
+		parsed_url = urlparse(url)
+		path = parsed_url.path.rstrip("/") or "/"
+		return f"{parsed_url.scheme.lower()}://{(parsed_url.netloc or '').lower()}{path}"
 
 	@staticmethod
 	def _extract_offer_value(offers: dict[str, Any] | None, key: str) -> Any:
@@ -459,14 +619,80 @@ class ProductPageScraper(BaseScraper):
 
 	def _looks_like_block_page(self, soup: BeautifulSoup) -> bool:
 		page_text = soup.get_text(" ", strip=True).lower()
+		title_text = soup.title.get_text(" ", strip=True).lower() if soup.title else ""
 		indicators = (
+			"access denied",
+			"forbidden",
 			"captcha",
+			"robot verification",
 			"verify you are human",
 			"robot olmad",
 			"güvenlik kontrol",
 			"unusual traffic",
 		)
-		return any(indicator in page_text for indicator in indicators)
+		return any(indicator in page_text or indicator in title_text for indicator in indicators)
+
+	def _is_platform_blocked(self, fetch_result: FetchResult) -> bool:
+		if fetch_result.status_code in {403, 429}:
+			return True
+		soup = BeautifulSoup(fetch_result.html, "html.parser")
+		return self._looks_like_block_page(soup)
+
+	def _log_price_debug_context(
+		self,
+		soup: BeautifulSoup,
+		structured_product: dict[str, Any] | None,
+		offers: dict[str, Any] | None,
+		url: str,
+	) -> None:
+		logger.info("Parser debug for %s current_price extraction on %s", self.platform, url)
+		if structured_product is not None:
+			logger.info(
+				"Structured product candidate: type=%s name=%s",
+				structured_product.get("@type"),
+				structured_product.get("name"),
+			)
+		if offers is not None:
+			logger.info(
+				"Structured offer fields: type=%s price=%s lowPrice=%s highPrice=%s priceSpecification=%s",
+				offers.get("@type"),
+				offers.get("price"),
+				offers.get("lowPrice"),
+				offers.get("highPrice"),
+				offers.get("priceSpecification"),
+			)
+
+		selector_matches = self._collect_debug_selector_matches(soup, self.CURRENT_PRICE_SELECTORS + self.OLD_PRICE_SELECTORS)
+		if selector_matches:
+			logger.info("Price selector matches: %s", " | ".join(selector_matches))
+
+		meta_matches = self._collect_debug_meta_matches(soup)
+		if meta_matches:
+			logger.info("Price-related meta/itemprop matches: %s", " | ".join(meta_matches))
+
+	def _collect_debug_selector_matches(self, soup: BeautifulSoup, selectors: tuple[str, ...]) -> list[str]:
+		matches: list[str] = []
+		for selector in selectors:
+			element = soup.select_one(selector)
+			if element is None:
+				continue
+			text = element.get_text(" ", strip=True)
+			if text:
+				matches.append(f"{selector}={text[:120]}")
+		return matches[:8]
+
+	def _collect_debug_meta_matches(self, soup: BeautifulSoup) -> list[str]:
+		results: list[str] = []
+		for meta in soup.select("meta[property='product:price:amount'], meta[property='og:price:amount'], meta[itemprop='price'], [itemprop='price']"):
+			if meta.name == "meta":
+				name = meta.get("property") or meta.get("itemprop") or "meta"
+				value = meta.get("content")
+			else:
+				name = meta.get("itemprop") or meta.name
+				value = meta.get_text(" ", strip=True)
+			if isinstance(value, str) and value.strip():
+				results.append(f"{name}={value[:120]}")
+		return results[:8]
 
 	def _set_failure(self, reason: str, details: str) -> None:
 		self.last_failure_reason = reason

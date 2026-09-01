@@ -2,28 +2,55 @@
 
 {% block title %}{{ product_page.product.name }} | Watch Price Tracker{% endblock %}
 {% block page_title %}{{ product_page.product.name }}{% endblock %}
-{% block page_description %}Marketplace-level detail for a single normalized product, including current listings and price history.{% endblock %}
+{% block page_description %}Historical price intelligence for one normalized product, including seller comparison and range-aware price history analysis.{% endblock %}
 {% block page_actions %}
 <a class="button button--ghost" href="{{ url_for('main.products') }}">Back to Products</a>
 {% endblock %}
 
 {% block content %}
-<section class="metrics-grid metrics-grid--detail">
+
+<section class="detail-meta card">
+	<div class="detail-meta__row">
+		<div>
+			<p class="detail-meta__label">Brand</p>
+			<strong>{{ product_page.product.brand or 'Not available' }}</strong>
+		</div>
+		<div>
+			<p class="detail-meta__label">Model</p>
+			<strong>{{ product_page.product.model or 'Not available' }}</strong>
+		</div>
+		<div>
+			<p class="detail-meta__label">Current Average</p>
+			<strong>{{ product_page.metrics.current_average_price|format_price }}</strong>
+		</div>
+		<div>
+			<p class="detail-meta__label">Last Updated</p>
+			<strong>{{ product_page.metrics.last_updated|format_datetime }}</strong>
+		</div>
+	</div>
+</section>
+
+<section class="metrics-grid metrics-grid--product-intelligence">
 	<article class="card metric-card metric-card--detail">
-		<p class="metric-card__label">Brand</p>
-		<p class="metric-card__value metric-card__value--small">{{ product_page.product.brand or 'Not available' }}</p>
+		<p class="metric-card__label">Current Best Price</p>
+		<p class="metric-card__value metric-card__value--small">{{ product_page.metrics.current_min_price|format_price }}</p>
 	</article>
 	<article class="card metric-card metric-card--detail">
-		<p class="metric-card__label">Model</p>
-		<p class="metric-card__value metric-card__value--small">{{ product_page.product.model or 'Not available' }}</p>
+		<p class="metric-card__label">Seller Count</p>
+		<p class="metric-card__value metric-card__value--small">{{ product_page.metrics.seller_count }}</p>
 	</article>
 	<article class="card metric-card metric-card--detail">
-		<p class="metric-card__label">Lowest Current Price</p>
-		<p class="metric-card__value metric-card__value--small">{{ product_page.lowest_current_price|format_price }}</p>
+		<p class="metric-card__label">Observed Low</p>
+		<p class="metric-card__value metric-card__value--small">{{ product_page.metrics.observed_min_price|format_price }}</p>
 	</article>
 	<article class="card metric-card metric-card--detail">
-		<p class="metric-card__label">Listings / Sellers</p>
-		<p class="metric-card__value metric-card__value--small">{{ product_page.listing_count }} / {{ product_page.seller_count }}</p>
+		<p class="metric-card__label">Observed High</p>
+		<p class="metric-card__value metric-card__value--small">{{ product_page.metrics.observed_max_price|format_price }}</p>
+	</article>
+	<article class="card metric-card metric-card--detail">
+		<p class="metric-card__label">Price Spread</p>
+		<p class="metric-card__value metric-card__value--small">{{ product_page.metrics.price_spread_amount|format_price }}</p>
+		<p class="metric-card__note">{{ product_page.metrics.price_spread_percentage|format_percentage(True) }}</p>
 	</article>
 </section>
 
@@ -31,47 +58,111 @@
 	<article class="card data-section">
 		<div class="section-heading">
 			<div>
-				<h2>Current Marketplace Listings</h2>
-				<p class="section-copy">Live normalized listing records currently associated with this product.</p>
+				<h2>Price History</h2>
+				<p class="section-copy">One readable series is shown at a time. By default, the chart uses the current cheapest listing for this product.</p>
 			</div>
 		</div>
 
-		{% if product_page.current_listings %}
-		<div class="table-wrap">
-			<table class="data-table">
-				<thead>
-					<tr>
-						<th scope="col">Platform</th>
-						<th scope="col">Seller</th>
-						<th scope="col">Current Price</th>
-						<th scope="col">Old Price</th>
-						<th scope="col">Discount</th>
-						<th scope="col">Availability</th>
-						<th scope="col">Last Updated</th>
-					</tr>
-				</thead>
-				<tbody>
-					{% for listing in product_page.current_listings %}
-					<tr{% if listing.is_lowest_price %} class="row-highlight"{% endif %}>
-						<td><span class="{{ listing.platform|platform_badge_class }}">{{ listing.platform|platform_label }}</span></td>
-						<td>{{ listing.seller_name or 'Not available' }}</td>
-						<td>
-							{{ listing.current_price|format_price(listing.currency) }}
-							{% if listing.is_lowest_price %}<span class="inline-status inline-status--success">Lowest price</span>{% endif %}
-						</td>
-						<td>{{ listing.old_price|format_price(listing.currency) }}</td>
-						<td>{% if listing.discount_percentage is not none %}{{ listing.discount_percentage }}%{% else %}Not available{% endif %}</td>
-						<td>{{ listing.availability or 'Not available' }}</td>
-						<td>{{ listing.last_updated|format_datetime }}</td>
-					</tr>
-					{% endfor %}
-				</tbody>
-			</table>
+		{% if product_page.selected_listing %}
+		<div class="history-toolbar">
+			<div class="range-tabs" role="tablist" aria-label="Price history range selector">
+				{% for option in product_page.range_options %}
+				<a class="range-tab{% if option.is_active %} is-active{% endif %}" href="{{ url_for('main.product_detail', product_id=product_page.product.id) }}?{{ merge_query_params(range=option.key, history_page=1) }}">{{ option.label }}</a>
+				{% endfor %}
+			</div>
+
+			<form class="history-controls" method="get" action="{{ url_for('main.product_detail', product_id=product_page.product.id) }}">
+				<input type="hidden" name="range" value="{{ product_page.selected_range }}">
+				<div class="form-field history-controls__field">
+					<label for="listing">Chart Listing</label>
+					<select id="listing" name="listing">
+						{% for item in product_page.seller_comparison %}
+						<option value="{{ item.listing_id }}"{% if item.listing_id == product_page.selected_listing_id %} selected{% endif %}>{{ item.seller_name or 'Unknown seller' }} / {{ item.platform|platform_label }}</option>
+						{% endfor %}
+					</select>
+				</div>
+				<button class="button button--secondary" type="submit">Apply</button>
+			</form>
+		</div>
+
+		<div class="result-grid detail-grid detail-grid--analytics">
+			<div class="result-stat">
+				<p class="result-label">Selected Listing</p>
+				<strong>{{ product_page.selected_listing.seller_name or 'Unknown seller' }} / {{ product_page.selected_listing.platform|platform_label }}</strong>
+				<p class="table-meta">{{ product_page.selected_listing.current_price|format_price(product_page.selected_listing.currency) }}</p>
+			</div>
+			<div class="result-stat">
+				<p class="result-label">Previous Distinct Price</p>
+				<strong>{% if product_page.selected_listing.previous_distinct_price is not none %}{{ product_page.selected_listing.previous_distinct_price|format_price(product_page.selected_listing.currency) }}{% else %}No previous price yet{% endif %}</strong>
+			</div>
+			<div class="result-stat">
+				<p class="result-label">Change vs Previous</p>
+				<strong>{% if product_page.selected_listing.absolute_change is not none %}{{ product_page.selected_listing.absolute_change|format_signed_price(product_page.selected_listing.currency) }}{% else %}No previous price yet{% endif %}</strong>
+				<p class="table-meta">{% if product_page.selected_listing.percentage_change is not none %}{{ product_page.selected_listing.percentage_change|format_percentage(True) }}{% else %}Neutral{% endif %}</p>
+			</div>
+			<div class="result-stat">
+				<p class="result-label">Observed Average</p>
+				<strong>{{ product_page.selected_listing.observed_average_price|format_price(product_page.selected_listing.currency) }}</strong>
+			</div>
+			<div class="result-stat">
+				<p class="result-label">Change Since First</p>
+				<strong>{% if product_page.selected_listing.change_since_first is not none %}{{ product_page.selected_listing.change_since_first|format_signed_price(product_page.selected_listing.currency) }}{% else %}No previous price yet{% endif %}</strong>
+				<p class="table-meta">{% if product_page.selected_listing.change_since_first_percentage is not none %}{{ product_page.selected_listing.change_since_first_percentage|format_percentage(True) }}{% else %}Neutral{% endif %}</p>
+			</div>
+			<div class="result-stat">
+				<p class="result-label">Observed Range</p>
+				<strong>{{ product_page.selected_listing.observed_min_price|format_price(product_page.selected_listing.currency) }} to {{ product_page.selected_listing.observed_max_price|format_price(product_page.selected_listing.currency) }}</strong>
+			</div>
+			<div class="result-stat">
+				<p class="result-label">Observation Quality</p>
+				<strong>{{ product_page.selected_listing.observation_count }} observations</strong>
+				<p class="table-meta">{% if product_page.selected_listing.actual_price_change_count %}{{ product_page.selected_listing.actual_price_change_count }} price changes{% else %}No price changes{% endif %}</p>
+			</div>
+		</div>
+
+		{% if product_page.chart.empty_message %}
+		<div class="empty-state empty-state--compact">
+			<h3>No chart data in this range.</h3>
+			<p>{{ product_page.chart.empty_message }}</p>
 		</div>
 		{% else %}
+		<div class="chart-card">
+			<div class="chart-card__header">
+				<div>
+					<p class="result-label">Selected Series</p>
+					<h3>{{ product_page.chart.series_label }}</h3>
+				</div>
+				<div class="chart-card__meta">
+					<span>{{ product_page.chart.point_count }} observations</span>
+					<span>{{ product_page.selected_range|upper }}</span>
+				</div>
+			</div>
+			<svg class="history-chart" viewBox="0 0 880 300" role="img" aria-labelledby="product-history-chart-title product-history-chart-desc">
+				<title id="product-history-chart-title">Price history for {{ product_page.chart.series_label }}</title>
+				<desc id="product-history-chart-desc">Historical price observations for the selected listing across the chosen time range.</desc>
+				{% for tick in product_page.chart.y_axis_ticks %}
+				<line class="history-chart__grid" x1="56" y1="{{ tick.y }}" x2="860" y2="{{ tick.y }}"></line>
+				<text class="history-chart__axis-label" x="48" y="{{ tick.y + 4 }}">{{ tick.label }}</text>
+				{% endfor %}
+				<polyline class="history-chart__line" points="{{ product_page.chart.polyline_points }}"></polyline>
+				{% for point in product_page.chart.points %}
+				<circle class="history-chart__point{% if point.is_actual_change %} history-chart__point--change{% endif %}" cx="{{ point.x }}" cy="{{ point.y }}" r="5">
+					<title>{{ point.recorded_at_label }} - {{ point.price|format_price(product_page.selected_listing.currency) }}</title>
+				</circle>
+				{% endfor %}
+				{% for label in product_page.chart.x_axis_labels %}
+				<text class="history-chart__x-label" x="{{ label.x }}" y="290">{{ label.label }}</text>
+				{% endfor %}
+			</svg>
+			<div class="chart-card__footer">
+				<p class="table-meta">Observed low {{ product_page.chart.min_price|format_price(product_page.selected_listing.currency) }} and observed high {{ product_page.chart.max_price|format_price(product_page.selected_listing.currency) }} in the selected range.</p>
+			</div>
+		</div>
+		{% endif %}
+		{% else %}
 		<div class="empty-state empty-state--compact">
-			<h3>No listings for this product yet.</h3>
-			<p>Import data or store a valid scraper result to populate current listings.</p>
+			<h3>No listing analytics yet.</h3>
+			<p>Import data or store a valid scraper result to populate listing-level price intelligence.</p>
 		</div>
 		{% endif %}
 	</article>
@@ -79,33 +170,39 @@
 	<article class="card data-section">
 		<div class="section-heading">
 			<div>
-				<h2>Price History</h2>
-				<p class="section-copy">Latest recorded observations for this product across tracked listings.</p>
+				<h2>Seller Comparison</h2>
+				<p class="section-copy">Compare current seller prices against the current cheapest listing without overloading the chart with too many concurrent series.</p>
 			</div>
 		</div>
 
-		{% if product_page.price_history %}
+		{% if product_page.seller_comparison %}
 		<div class="table-wrap">
 			<table class="data-table">
 				<thead>
 					<tr>
-						<th scope="col">Recorded</th>
-						<th scope="col">Platform</th>
 						<th scope="col">Seller</th>
-						<th scope="col">Price</th>
-						<th scope="col">Old Price</th>
-						<th scope="col">Discount</th>
+						<th scope="col">Platform</th>
+						<th scope="col">Current Price</th>
+						<th scope="col">Difference from Cheapest</th>
+						<th scope="col">Difference %</th>
+						<th scope="col">Last Updated</th>
 					</tr>
 				</thead>
 				<tbody>
-					{% for item in product_page.price_history %}
-					<tr>
-						<td>{{ item.recorded_at|format_datetime }}</td>
+					{% for item in product_page.seller_comparison %}
+					<tr{% if item.is_cheapest %} class="row-highlight"{% endif %}>
+						<td>
+							<strong>{{ item.seller_name or 'Not available' }}</strong>
+							<p class="table-meta">{{ item.observation_count }} observations{% if item.actual_price_change_count %} · {{ item.actual_price_change_count }} price changes{% else %} · No price changes{% endif %}</p>
+						</td>
 						<td><span class="{{ item.platform|platform_badge_class }}">{{ item.platform|platform_label }}</span></td>
-						<td>{{ item.seller_name or 'Not available' }}</td>
-						<td>{{ item.price|format_price(item.currency) }}</td>
-						<td>{{ item.old_price|format_price(item.currency) }}</td>
-						<td>{% if item.discount_percentage is not none %}{{ item.discount_percentage }}%{% else %}Not available{% endif %}</td>
+						<td>
+							{{ item.current_price|format_price(item.currency) }}
+							{% if item.is_cheapest %}<span class="inline-status inline-status--success">Cheapest</span>{% endif %}
+						</td>
+						<td>{% if item.difference_from_cheapest is not none %}{% if item.difference_from_cheapest == 0 %}Best current price{% else %}{{ item.difference_from_cheapest|format_signed_price(item.currency) }}{% endif %}{% else %}Not available{% endif %}</td>
+						<td>{% if item.difference_percentage is not none %}{{ item.difference_percentage|format_percentage(True) }}{% else %}Not available{% endif %}</td>
+						<td>{{ item.last_updated|format_datetime }}</td>
 					</tr>
 					{% endfor %}
 				</tbody>
@@ -113,8 +210,76 @@
 		</div>
 		{% else %}
 		<div class="empty-state empty-state--compact">
-			<h3>No price history recorded yet.</h3>
-			<p>Price observations will appear here after imports or successful scraper persistence runs.</p>
+			<h3>No seller comparison data yet.</h3>
+			<p>Current seller prices will appear here after imports or successful scraper persistence runs.</p>
+		</div>
+		{% endif %}
+	</article>
+
+	<article class="card data-section">
+		<div class="section-heading">
+			<div>
+				<h2>Observation History</h2>
+				<p class="section-copy">Paginated observation history for the selected listing, including change markers versus the previous distinct price.</p>
+			</div>
+		</div>
+
+		{% if product_page.history_items %}
+		<div class="table-wrap">
+			<table class="data-table">
+				<thead>
+					<tr>
+						<th scope="col">Date</th>
+						<th scope="col">Seller</th>
+						<th scope="col">Platform</th>
+						<th scope="col">Price</th>
+						<th scope="col">Change from Previous Distinct Price</th>
+					</tr>
+				</thead>
+				<tbody>
+					{% for item in product_page.history_items %}
+					<tr>
+						<td>{{ item.recorded_at|format_datetime }}</td>
+						<td>{{ item.seller_name or 'Not available' }}</td>
+						<td><span class="{{ item.platform|platform_badge_class }}">{{ item.platform|platform_label }}</span></td>
+						<td>{{ item.price|format_price(item.currency) }}</td>
+						<td>
+							{% if item.is_actual_change %}
+							<span class="change-indicator change-indicator--{{ item.absolute_change|change_direction }}">
+								<span class="change-indicator__icon">{% if item.absolute_change < 0 %}&darr;{% else %}&uarr;{% endif %}</span>
+								<span>{{ item.absolute_change|format_signed_price(item.currency) }}</span>
+								<span class="change-indicator__detail">{{ item.percentage_change|format_percentage(True) }}</span>
+							</span>
+							{% else %}
+							<span class="change-indicator change-indicator--neutral">
+								<span class="change-indicator__icon">&rarr;</span>
+								<span>No price change</span>
+							</span>
+							{% endif %}
+						</td>
+					</tr>
+					{% endfor %}
+				</tbody>
+			</table>
+		</div>
+
+		{% if product_page.history_total_pages > 1 %}
+		<nav class="pagination" aria-label="Observation history pagination">
+			<span class="pagination__status">Page {{ product_page.history_page }} of {{ product_page.history_total_pages }}</span>
+			<div class="form-actions">
+				{% if product_page.history_page > 1 %}
+				<a class="button button--ghost" href="{{ url_for('main.product_detail', product_id=product_page.product.id) }}?{{ merge_query_params(history_page=product_page.history_page - 1) }}">Previous</a>
+				{% endif %}
+				{% if product_page.history_page < product_page.history_total_pages %}
+				<a class="button button--ghost" href="{{ url_for('main.product_detail', product_id=product_page.product.id) }}?{{ merge_query_params(history_page=product_page.history_page + 1) }}">Next</a>
+				{% endif %}
+			</div>
+		</nav>
+		{% endif %}
+		{% else %}
+		<div class="empty-state empty-state--compact">
+			<h3>No observations in this range.</h3>
+			<p>Select another range or listing to see more historical observations.</p>
 		</div>
 		{% endif %}
 	</article>

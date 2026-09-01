@@ -31,30 +31,37 @@
 	<article class="card data-section">
 		<div class="section-heading">
 			<div>
-				<h2>Recent Price Observations</h2>
-				<p class="section-copy">Latest historical price snapshots recorded in the database.</p>
+				<h2>Biggest Price Drops</h2>
+				<p class="section-copy">Real price decreases detected from distinct changes only in {{ dashboard.price_intelligence.window_label|lower }}.</p>
 			</div>
 		</div>
 
-		{% if dashboard.recent_price_observations %}
+		{% if dashboard.price_intelligence.biggest_drops %}
 		<div class="table-wrap">
 			<table class="data-table">
 				<thead>
 					<tr>
 						<th scope="col">Product</th>
-						<th scope="col">Platform</th>
 						<th scope="col">Seller</th>
-						<th scope="col">Price</th>
-						<th scope="col">Recorded</th>
+						<th scope="col">Old Price</th>
+						<th scope="col">New Price</th>
+						<th scope="col">Change</th>
+						<th scope="col">Time</th>
 					</tr>
 				</thead>
 				<tbody>
-					{% for item in dashboard.recent_price_observations %}
+					{% for item in dashboard.price_intelligence.biggest_drops %}
 					<tr>
 						<td><a class="table-link" href="{{ url_for('main.product_detail', product_id=item.product_id) }}">{{ item.product_name }}</a></td>
-						<td><span class="{{ item.platform|platform_badge_class }}">{{ item.platform|platform_label }}</span></td>
 						<td>{{ item.seller_name or 'Not available' }}</td>
-						<td>{{ item.price|format_price(item.currency) }}</td>
+						<td>{{ item.old_price|format_price(item.currency) }}</td>
+						<td>{{ item.new_price|format_price(item.currency) }}</td>
+						<td>
+							<span class="change-indicator change-indicator--{{ item.absolute_change|change_direction }}">
+								<span class="change-indicator__icon">&darr;</span>
+								<span>{{ item.percentage_change|format_percentage(True) }}</span>
+							</span>
+						</td>
 						<td>{{ item.recorded_at|format_datetime }}</td>
 					</tr>
 					{% endfor %}
@@ -63,9 +70,109 @@
 		</div>
 		{% else %}
 		<div class="empty-state">
+			{% if dashboard.metrics.price_observations == 0 %}
 			<h3>No price observations yet.</h3>
 			<p>No product data yet. Import a CSV or Excel file to start tracking prices.</p>
+			{% else %}
+			<h3>No price drops in the selected window.</h3>
+			<p>Repeated identical observations are ignored, so only real decreases will appear here.</p>
+			{% endif %}
 			<a class="button button--secondary" href="{{ url_for('main.import_data') }}">Import Data</a>
+		</div>
+		{% endif %}
+	</article>
+
+	<article class="card data-section">
+		<div class="section-heading">
+			<div>
+				<h2>Biggest Price Increases</h2>
+				<p class="section-copy">Largest upward moves based on the latest real distinct change in {{ dashboard.price_intelligence.window_label|lower }}.</p>
+			</div>
+		</div>
+
+		{% if dashboard.price_intelligence.biggest_increases %}
+		<div class="table-wrap">
+			<table class="data-table">
+				<thead>
+					<tr>
+						<th scope="col">Product</th>
+						<th scope="col">Seller</th>
+						<th scope="col">Old Price</th>
+						<th scope="col">New Price</th>
+						<th scope="col">Change</th>
+						<th scope="col">Time</th>
+					</tr>
+				</thead>
+				<tbody>
+					{% for item in dashboard.price_intelligence.biggest_increases %}
+					<tr>
+						<td><a class="table-link" href="{{ url_for('main.product_detail', product_id=item.product_id) }}">{{ item.product_name }}</a></td>
+						<td>{{ item.seller_name or 'Not available' }}</td>
+						<td>{{ item.old_price|format_price(item.currency) }}</td>
+						<td>{{ item.new_price|format_price(item.currency) }}</td>
+						<td>
+							<span class="change-indicator change-indicator--{{ item.absolute_change|change_direction }}">
+								<span class="change-indicator__icon">&uarr;</span>
+								<span>{{ item.percentage_change|format_percentage(True) }}</span>
+							</span>
+						</td>
+						<td>{{ item.recorded_at|format_datetime }}</td>
+					</tr>
+					{% endfor %}
+				</tbody>
+			</table>
+		</div>
+		{% else %}
+		<div class="empty-state empty-state--compact">
+			<h3>No price increases in the selected window.</h3>
+			<p>Only actual upward changes are listed here; unchanged observations remain excluded.</p>
+		</div>
+		{% endif %}
+	</article>
+
+	<article class="card data-section data-section--wide">
+		<div class="section-heading">
+			<div>
+				<h2>Recent Price Changes</h2>
+				<p class="section-copy">Only real distinct price moves are shown here. Repeated identical observations are intentionally filtered out.</p>
+			</div>
+		</div>
+
+		{% if dashboard.price_intelligence.recent_changes %}
+		<div class="table-wrap">
+			<table class="data-table">
+				<thead>
+					<tr>
+						<th scope="col">Product</th>
+						<th scope="col">Seller</th>
+						<th scope="col">Platform</th>
+						<th scope="col">Move</th>
+						<th scope="col">Time</th>
+					</tr>
+				</thead>
+				<tbody>
+					{% for item in dashboard.price_intelligence.recent_changes %}
+					<tr>
+						<td><a class="table-link" href="{{ url_for('main.product_detail', product_id=item.product_id) }}">{{ item.product_name }}</a></td>
+						<td>{{ item.seller_name or 'Not available' }}</td>
+						<td><span class="{{ item.platform|platform_badge_class }}">{{ item.platform|platform_label }}</span></td>
+						<td>
+							<span class="change-indicator change-indicator--{{ item.absolute_change|change_direction }}">
+								<span class="change-indicator__icon">{% if item.absolute_change < 0 %}&darr;{% else %}&uarr;{% endif %}</span>
+								<span>{{ item.old_price|format_price(item.currency) }} to {{ item.new_price|format_price(item.currency) }}</span>
+								<span class="change-indicator__detail">{{ item.percentage_change|format_percentage(True) }}</span>
+							</span>
+						</td>
+						<td>{{ item.recorded_at|format_datetime }}</td>
+					</tr>
+					{% endfor %}
+				</tbody>
+			</table>
+		</div>
+		{% else %}
+		<div class="empty-state">
+			<h3>No recent price changes yet.</h3>
+			<p>Import or scrape more observations. Unchanged repeat observations will not appear in this table.</p>
 		</div>
 		{% endif %}
 	</article>

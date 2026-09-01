@@ -78,6 +78,27 @@ class DatabaseModelTests(unittest.TestCase):
 		self.assertEqual(saved_listing.seller.platform, "hepsiburada")
 		self.assertEqual(saved_listing.current_price, Decimal("7499.90"))
 
+	def test_listing_can_be_created_without_seller(self) -> None:
+		product = Product(brand="Casio", model="F-91W", name="Casio F-91W")
+		listing = Listing(
+			product=product,
+			seller=None,
+			platform="trendyol",
+			external_product_id="1012301",
+			url="https://www.trendyol.com/casio/f-91w-p-1012301",
+			current_price=Decimal("749.00"),
+			currency="TRY",
+			availability="in_stock",
+		)
+
+		db.session.add(listing)
+		db.session.commit()
+
+		saved_listing = Listing.query.one()
+		self.assertIsNone(saved_listing.seller_id)
+		self.assertIsNone(saved_listing.seller)
+		self.assertEqual(saved_listing.product.name, "Casio F-91W")
+
 	def test_price_history_can_be_added_to_listing(self) -> None:
 		listing = self._create_listing()
 		history_entry = PriceHistory(

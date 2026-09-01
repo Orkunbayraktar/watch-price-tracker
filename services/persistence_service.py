@@ -201,25 +201,19 @@ def _find_or_create_listing(
 	platform = data.platform.strip()
 	external_product_id = data.external_product_id.strip()
 	product_url = data.product_url.strip()
-	query = Listing.query.filter(
+	candidates = (
+		Listing.query.filter(
 		Listing.platform == platform,
 		Listing.external_product_id == external_product_id,
+		)
+		.order_by(Listing.id)
+		.all()
 	)
 
-	if seller is not None:
-		listing = query.filter(Listing.seller_id == seller.id).order_by(Listing.id).first()
-	else:
-		listing = query.filter(
-			Listing.seller_id.is_(None),
-			Listing.url == product_url,
-		).order_by(Listing.id).first()
+	listing = _match_existing_listing(candidates, seller=seller, product_url=product_url)
 
 	if listing is not None:
 		return listing, False
-
-	exact_url_matches = query.filter(Listing.url == product_url).order_by(Listing.id).all()
-	if seller is None and len(exact_url_matches) == 1:
-		return exact_url_matches[0], False
 
 	listing = Listing(
 		product=product,
@@ -237,6 +231,46 @@ def _find_or_create_listing(
 	)
 	db.session.add(listing)
 	return listing, True
+
+
+def _match_existing_listing(
+	candidates: list[Listing],
+	*,
+	seller: Seller | None,
+	product_url: str,
+) -> Listing | None:
+	if not candidates:
+		return None
+
+	exact_url_candidates = [candidate for candidate in candidates if candidate.url == product_url]
+	sellerless_exact_url_candidates = [candidate for candidate in exact_url_candidates if candidate.seller_id is None]
+	sellerless_candidates = [candidate for candidate in candidates if candidate.seller_id is None]
+
+	if seller is not None:
+		for candidate in candidates:
+			if candidate.seller_id == seller.id:
+				return candidate
+		if sellerless_exact_url_candidates:
+			return sellerless_exact_url_candidates[0]
+		if len(sellerless_candidates) == 1:
+			return sellerless_candidates[0]
+		if len(candidates) == 1 and candidates[0].seller_id is None:
+			return candidates[0]
+		return None
+
+	if sellerless_exact_url_candidates:
+		return sellerless_exact_url_candidates[0]
+
+	if len(exact_url_candidates) == 1:
+		return exact_url_candidates[0]
+
+	if len(sellerless_candidates) == 1:
+		return sellerless_candidates[0]
+
+	if len(candidates) == 1:
+		return candidates[0]
+
+	return None
 
 
 def _update_listing(

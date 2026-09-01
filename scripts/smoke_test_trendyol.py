@@ -21,7 +21,7 @@ def main() -> int:
 	"""CLI entry point for the Trendyol smoke test script."""
 	logging.basicConfig(level=logging.INFO, format="%(levelname)s %(name)s: %(message)s")
 	args = build_smoke_argument_parser("Trendyol").parse_args()
-	return run_smoke_test(args.url, TrendyolScraper, "Trendyol")
+	return run_smoke_test(args.url, TrendyolScraper, "Trendyol", debug_parser=args.debug_parser)
 
 
 if __name__ == "__main__":

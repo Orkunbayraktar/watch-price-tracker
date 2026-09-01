@@ -5,9 +5,10 @@ import logging
 from flask import Blueprint, abort, current_app, render_template, request
 from werkzeug.exceptions import RequestEntityTooLarge
 
-from services.import_service import ImportServiceError, commit_import, preview_import
 from services.dashboard_service import get_dashboard_data
-from services.product_service import get_product_detail, list_products
+from services.import_service import ImportServiceError, commit_import, preview_import
+from services.price_analysis_service import get_product_price_intelligence_page
+from services.product_service import list_products
 from services.seller_service import get_seller_detail, list_sellers
 
 
@@ -37,7 +38,12 @@ def products() -> str:
 @main_bp.route("/products/<int:product_id>")
 def product_detail(product_id: int) -> str:
 	"""Render the product detail page for a single product."""
-	product_page = get_product_detail(product_id)
+	product_page = get_product_price_intelligence_page(
+		product_id,
+		range_key=request.args.get("range"),
+		selected_listing_id=request.args.get("listing", type=int),
+		history_page=request.args.get("history_page", 1, type=int) or 1,
+	)
 	if product_page is None:
 		abort(404)
 	return render_template("product_detail.html", product_page=product_page)

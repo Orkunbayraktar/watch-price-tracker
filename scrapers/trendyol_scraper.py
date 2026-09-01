@@ -18,7 +18,11 @@ class TrendyolScraper(ProductPageScraper):
 	)
 	CURRENT_PRICE_SELECTORS = (
 		"[data-testid='price-current-price']",
+		"[data-testid='normal-price']",
+		"[data-testid='sale-price']",
 		".prc-dsc",
+		".price.normal-price",
+		".price.discounted-price",
 	)
 	OLD_PRICE_SELECTORS = (
 		"[data-testid='price-old-price']",

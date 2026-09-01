@@ -75,6 +75,119 @@ MISSING_PRICE_HTML = """
 </html>
 """
 
+GRAPH_PRICE_HTML = """
+<html>
+	<head>
+		<script type="application/ld+json">
+			{
+				"@context": "https://schema.org",
+				"@graph": [
+					{
+						"@type": "BreadcrumbList",
+						"itemListElement": []
+					},
+					{
+						"@type": "Product",
+						"@id": "https://www.trendyol.com/casio/f-91w-p-33139591",
+						"name": "Casio F-91W Digital Saat",
+						"brand": {"@type": "Brand", "name": "Casio"},
+						"offers": {
+							"@type": "Offer",
+							"price": "749.00",
+							"priceCurrency": "TRY"
+						}
+					}
+				]
+			}
+		</script>
+	</head>
+	<body>
+		<h1 data-testid="product-name">Casio F-91W Digital Saat</h1>
+	</body>
+</html>
+"""
+
+AGGREGATE_OFFER_HTML = """
+<html>
+	<head>
+		<script type="application/ld+json">
+			{
+				"@context": "https://schema.org",
+				"@type": "Product",
+				"name": "Casio Vintage Saat",
+				"offers": {
+					"@type": "AggregateOffer",
+					"lowPrice": "6.499,00",
+					"highPrice": "6.999,00",
+					"priceCurrency": "TRY"
+				}
+			}
+		</script>
+	</head>
+	<body>
+		<h1 data-testid="product-name">Casio Vintage Saat</h1>
+	</body>
+</html>
+"""
+
+PRICE_SPECIFICATION_HTML = """
+<html>
+	<head>
+		<script type="application/ld+json">
+			{
+				"@context": "https://schema.org",
+				"@type": "Product",
+				"name": "Casio Edifice Saat",
+				"offers": {
+					"@type": "Offer",
+					"priceCurrency": "TRY",
+					"priceSpecification": {
+						"@type": "PriceSpecification",
+						"price": "5.499,00"
+					}
+				}
+			}
+		</script>
+	</head>
+	<body>
+		<h1 data-testid="product-name">Casio Edifice Saat</h1>
+	</body>
+</html>
+"""
+
+ITEMPROP_PRICE_HTML = """
+<html>
+	<head>
+		<meta itemprop="price" content="6199.00">
+		<meta property="og:title" content="Casio Classic Saat">
+	</head>
+	<body>
+		<h1 data-testid="product-name">Casio Classic Saat</h1>
+	</body>
+</html>
+"""
+
+NORMAL_PRICE_SELECTOR_HTML = """
+<html>
+	<body>
+		<h1 data-testid="product-name">Casio Rendered Price Saat</h1>
+		<div class="price-wrapper">
+			<div class="price normal-price" data-testid="normal-price">749 TL</div>
+			<div class="price old-price" data-testid="price-old-price">899 TL</div>
+		</div>
+	</body>
+</html>
+"""
+
+OLD_PRICE_ONLY_HTML = """
+<html>
+	<body>
+		<h1 data-testid="product-name">Casio Old Price Only Saat</h1>
+		<span data-testid="price-old-price">8.199,90 TL</span>
+	</body>
+</html>
+"""
+
 
 class FakeResponse:
 	"""Simple fake response object for session.get tests."""
@@ -130,6 +243,91 @@ def test_parse_product_page_reads_name_and_price() -> None:
 	assert parsed.brand == "Casio"
 	assert parsed.model == "GA-2100-1A1DR"
 	assert parsed.external_product_id == "33139591"
+
+
+def test_parse_current_price_from_json_ld_offer() -> None:
+	scraper = TrendyolScraper()
+
+	parsed = scraper.parse_product_page(
+		FULL_HTML,
+		"https://www.trendyol.com/casio/g-shock-ga-2100-p-33139591",
+	)
+
+	assert parsed is not None
+	assert parsed.current_price == Decimal("7499.90")
+
+
+def test_parse_current_price_from_nested_graph_product() -> None:
+	scraper = TrendyolScraper()
+
+	parsed = scraper.parse_product_page(
+		GRAPH_PRICE_HTML,
+		"https://www.trendyol.com/casio/f-91w-p-33139591",
+	)
+
+	assert parsed is not None
+	assert parsed.current_price == Decimal("749.00")
+
+
+def test_parse_current_price_from_aggregate_offer_low_price() -> None:
+	scraper = TrendyolScraper()
+
+	parsed = scraper.parse_product_page(
+		AGGREGATE_OFFER_HTML,
+		"https://www.trendyol.com/casio/vintage-p-33139591",
+	)
+
+	assert parsed is not None
+	assert parsed.current_price == Decimal("6499.00")
+
+
+def test_parse_current_price_from_price_specification() -> None:
+	scraper = TrendyolScraper()
+
+	parsed = scraper.parse_product_page(
+		PRICE_SPECIFICATION_HTML,
+		"https://www.trendyol.com/casio/edifice-p-33139591",
+	)
+
+	assert parsed is not None
+	assert parsed.current_price == Decimal("5499.00")
+
+
+def test_parse_current_price_from_meta_itemprop() -> None:
+	scraper = TrendyolScraper()
+
+	parsed = scraper.parse_product_page(
+		ITEMPROP_PRICE_HTML,
+		"https://www.trendyol.com/casio/classic-p-33139591",
+	)
+
+	assert parsed is not None
+	assert parsed.current_price == Decimal("6199.00")
+
+
+def test_parse_current_price_from_rendered_trendyol_normal_price_selector() -> None:
+	scraper = TrendyolScraper()
+
+	parsed = scraper.parse_product_page(
+		NORMAL_PRICE_SELECTOR_HTML,
+		"https://www.trendyol.com/casio/rendered-price-p-33139591",
+	)
+
+	assert parsed is not None
+	assert parsed.current_price == Decimal("749.00")
+
+
+def test_old_price_is_not_mistaken_for_current_price() -> None:
+	scraper = TrendyolScraper()
+
+	parsed = scraper.parse_product_page(
+		NORMAL_PRICE_SELECTOR_HTML,
+		"https://www.trendyol.com/casio/rendered-price-p-33139591",
+	)
+
+	assert parsed is not None
+	assert parsed.current_price == Decimal("749.00")
+	assert parsed.old_price == Decimal("899.00")
 
 
 def test_parse_product_page_reads_seller_fields_when_available() -> None:
@@ -234,6 +432,18 @@ def test_parse_returns_none_when_current_price_is_missing() -> None:
 	parsed = scraper.parse_product_page(
 		MISSING_PRICE_HTML,
 		"https://www.trendyol.com/casio/g-shock-minimal-p-33139591",
+	)
+
+	assert parsed is None
+	assert scraper.last_failure_reason == "invalid_data"
+
+
+def test_old_price_without_current_price_still_returns_invalid_data() -> None:
+	scraper = TrendyolScraper()
+
+	parsed = scraper.parse_product_page(
+		OLD_PRICE_ONLY_HTML,
+		"https://www.trendyol.com/casio/old-price-only-p-33139591",
 	)
 
 	assert parsed is None
