@@ -1,9 +1,8 @@
 """Flask uygulama paketinin başlangıç modülü."""
 
-from pathlib import Path
-
 from flask import Flask
 
+from app.resource_paths import get_resource_root
 from app.template_helpers import register_template_helpers
 from config.settings import Config
 from database.db import init_db
@@ -11,7 +10,7 @@ from database.db import init_db
 
 def create_app(config_overrides: dict | None = None) -> Flask:
 	"""Application factory for the Watch Price Tracker app."""
-	project_root = Path(__file__).resolve().parent.parent
+	project_root = get_resource_root()
 	app = Flask(
 		__name__,
 		template_folder=str(project_root / "templates"),

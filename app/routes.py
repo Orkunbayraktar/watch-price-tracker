@@ -2,7 +2,7 @@
 
 import logging
 
-from flask import Blueprint, abort, current_app, flash, redirect, render_template, request, url_for
+from flask import Blueprint, abort, current_app, flash, jsonify, redirect, render_template, request, url_for
 from werkzeug.exceptions import RequestEntityTooLarge
 
 from discovery import DiscoveryResult
@@ -68,6 +68,12 @@ from services.watchlist_service import (
 
 main_bp = Blueprint("main", __name__)
 logger = logging.getLogger(__name__)
+
+
+@main_bp.get("/health")
+def health():
+	"""Return minimal localhost readiness information for the desktop launcher."""
+	return jsonify(application="watch-price-tracker", status="ok")
 
 
 @main_bp.route("/")

@@ -85,6 +85,26 @@ pip install -r requirements.txt
 python -m playwright install chromium
 ```
 
+## Desktop Launcher
+
+`launcher.py` is the desktop-style Python entry point and the planned entry point for later PyInstaller packaging. It initializes the existing database and scheduler once, starts a Waitress WSGI server bound only to `127.0.0.1`, waits for `/health`, and then opens the dashboard in the default browser. This stage does not build an EXE or package Chromium.
+
+Run the normal development server with:
+
+```powershell
+.\.venv\Scripts\python.exe run.py
+```
+
+Test the desktop-style lifecycle with:
+
+```powershell
+.\.venv\Scripts\python.exe launcher.py
+```
+
+The launcher tries port `5000` first and atomically reserves a dynamic localhost port when it is unavailable. Runtime state and rotating logs are stored under `%LOCALAPPDATA%\WatchPriceTracker\`, not in the repository. An OS-backed lock prevents a second server or scheduler: launching again validates the first instance through `/health`, reopens its exact dashboard URL, and exits. A crash releases the OS lock automatically, so stale JSON state is cleared by the next lock owner.
+
+Closing the browser does not stop the launcher or scheduler. Re-run `launcher.py` to reopen the dashboard, or use the localhost URL recorded in `instance.json` while the launcher is running. Stop the owning launcher with `Ctrl+C`; it closes Waitress, stops APScheduler, removes connection state, and releases the lock. The inert `instance.lock` coordination file may remain, but it does not represent a held or stale lock.
+
 ## Development Status
 
 This project is an actively developed university internship project.
