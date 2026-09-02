@@ -25,6 +25,20 @@
 </section>
 {% endif %}
 
+<section class="card scheduler-control-summary" aria-label="Automatic update summary">
+	<div>
+		<p class="eyebrow">Automatic Updates</p>
+		<h2>Scheduler</h2>
+		<p class="section-copy">Daily active Watchlist updates run only while this local application is open.</p>
+	</div>
+	<div class="scheduler-control-summary__facts">
+		<span><small>Status</small><strong>{{ 'Running' if control.scheduler_summary.is_running else 'Stopped' }}</strong></span>
+		<span><small>Enabled</small><strong>{{ control.scheduler_summary.enabled_count }}</strong></span>
+		<span><small>Next Run</small><strong>{{ control.scheduler_summary.next_run_at|format_istanbul_datetime }}</strong></span>
+	</div>
+	<a class="button button--ghost" href="{{ url_for('main.scheduler_page') }}">Manage Scheduler</a>
+</section>
+
 <section class="metrics-grid control-metrics" aria-label="Scraping operations summary">
 	<article class="card metric-card">
 		<p class="metric-card__label">Active Products</p>

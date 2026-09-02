@@ -14,6 +14,7 @@ from services.scrape_run_service import (
 	get_recent_scrape_run_summaries,
 	get_running_scrape_run_summary,
 )
+from services.scheduler_service import SchedulerSummary, get_scheduler_summary
 from services.watchlist_service import (
 	DEFAULT_WATCHLIST_FETCH_STRATEGY,
 	WatchlistPageItem,
@@ -84,6 +85,7 @@ class ScrapingControlData:
 	running_run: ScrapeRunSummary | None
 	recent_runs: list[ScrapeRunSummary]
 	recent_failures: list[RecentScrapingFailure]
+	scheduler_summary: SchedulerSummary
 
 
 def get_scraping_control_data() -> ScrapingControlData:
@@ -98,6 +100,7 @@ def get_scraping_control_data() -> ScrapingControlData:
 		running_run=get_running_scrape_run_summary(),
 		recent_runs=recent_runs,
 		recent_failures=_get_recent_failures(limit=RECENT_FAILURE_LIMIT),
+		scheduler_summary=get_scheduler_summary(),
 	)
 
 

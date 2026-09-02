@@ -9,7 +9,7 @@ from typing import Callable
 from sqlalchemy import or_
 
 from database.db import db
-from database.models import Listing, PriceHistory, Product, ScrapeRun, ScrapeRunItem, Seller, WatchlistItem
+from database.models import Listing, PriceHistory, Product, ScrapeRun, ScrapeRunItem, ScrapeSchedule, Seller, WatchlistItem
 from services.scrape_run_service import get_running_scrape_run_summary
 
 
@@ -75,6 +75,10 @@ def clear_price_history() -> DataManagementResult:
 def clear_scrape_history() -> DataManagementResult:
 	"""Delete item-level and batch scraping history only."""
 	def delete_records() -> dict[str, int]:
+		ScrapeSchedule.query.filter(ScrapeSchedule.last_scrape_run_id.is_not(None)).update(
+			{ScrapeSchedule.last_scrape_run_id: None},
+			synchronize_session=False,
+		)
 		return {
 			"scrape_run_items": _delete_all(ScrapeRunItem),
 			"scrape_runs": _delete_all(ScrapeRun),
@@ -142,6 +146,10 @@ def reset_all_data(confirmation: str) -> DataManagementResult:
 		raise DataManagementConfirmationError("Type RESET exactly to confirm a full data reset.")
 
 	def delete_records() -> dict[str, int]:
+		ScrapeSchedule.query.filter(ScrapeSchedule.last_scrape_run_id.is_not(None)).update(
+			{ScrapeSchedule.last_scrape_run_id: None},
+			synchronize_session=False,
+		)
 		return {
 			"scrape_run_items": _delete_all(ScrapeRunItem),
 			"scrape_runs": _delete_all(ScrapeRun),

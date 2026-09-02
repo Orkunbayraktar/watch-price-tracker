@@ -899,6 +899,153 @@ h3 {
 	gap: var(--space-6);
 }
 
+.scheduler-status-grid {
+	grid-template-columns: repeat(4, minmax(0, 1fr));
+}
+
+.scheduler-context,
+.scheduler-control-summary {
+	display: flex;
+	align-items: center;
+	justify-content: space-between;
+	gap: var(--space-5);
+}
+
+.scheduler-context > div,
+.scheduler-control-summary > div:first-child {
+	display: grid;
+	gap: var(--space-1);
+}
+
+.scheduler-context p {
+	margin: 0;
+	color: var(--text-muted);
+}
+
+.schedule-timezone {
+	flex: 0 0 auto;
+	padding: var(--space-2) var(--space-3);
+	border: 1px solid var(--border);
+	border-radius: 999px;
+	background: var(--surface-muted);
+	color: var(--text-muted);
+	font-size: 0.84rem;
+	font-weight: 700;
+}
+
+.schedule-form {
+	display: grid;
+	grid-template-columns: minmax(0, 1.5fr) minmax(180px, 0.65fr) minmax(210px, 0.8fr);
+	align-items: start;
+	gap: var(--space-4);
+}
+
+.schedule-form .form-field--wide {
+	grid-column: auto;
+}
+
+.schedule-enabled-control {
+	display: flex;
+	align-items: center;
+	gap: var(--space-3);
+	min-height: 44px;
+	margin-top: 1.8rem;
+	padding: var(--space-3) var(--space-4);
+	border: 1px solid var(--border);
+	border-radius: var(--radius-sm);
+	background: var(--surface-muted);
+	cursor: pointer;
+}
+
+.schedule-enabled-control input {
+	width: 22px;
+	height: 22px;
+	flex: 0 0 22px;
+	accent-color: var(--accent);
+}
+
+.schedule-enabled-control span {
+	display: grid;
+	gap: var(--space-1);
+}
+
+.schedule-enabled-control small,
+.scheduler-control-summary__facts small {
+	color: var(--text-muted);
+}
+
+.schedule-form__actions {
+	grid-column: 1 / -1;
+}
+
+.schedule-table {
+	min-width: 1120px;
+}
+
+.schedule-type,
+.schedule-run-link {
+	display: block;
+	margin-top: var(--space-1);
+}
+
+.schedule-clock {
+	font-family: var(--font-mono);
+	font-size: 1.05rem;
+}
+
+.schedule-status-badge {
+	display: inline-flex;
+	align-items: center;
+	min-height: 30px;
+	padding: 0 var(--space-3);
+	border: 1px solid var(--border);
+	border-radius: 999px;
+	font-size: 0.8rem;
+	font-weight: 800;
+}
+
+.schedule-status-badge--enabled {
+	border-color: #bce6d1;
+	background: var(--success-soft);
+	color: var(--success);
+}
+
+.schedule-status-badge--disabled {
+	background: var(--surface-muted);
+	color: var(--text-muted);
+}
+
+.schedule-actions {
+	min-width: 210px;
+}
+
+.scheduler-control-summary__facts {
+	display: flex;
+	align-items: stretch;
+	gap: var(--space-3);
+}
+
+.scheduler-control-summary__facts span {
+	display: grid;
+	gap: var(--space-1);
+	min-width: 94px;
+	padding: var(--space-2) var(--space-3);
+	border: 1px solid var(--border);
+	border-radius: var(--radius-sm);
+	background: var(--surface-muted);
+}
+
+.scheduler-control-summary__facts strong {
+	font-size: 0.9rem;
+}
+
+.run-status-badge--skipped_busy,
+.run-status-badge--skipped_no_active_items {
+	background: var(--warning-soft);
+	border-color: rgba(154, 98, 0, 0.18);
+	color: var(--warning);
+}
+
 .control-utility-grid {
 	grid-template-columns: repeat(2, minmax(0, 1fr));
 }
@@ -1770,6 +1917,7 @@ h3 {
 	.metrics-grid--detail,
 	.metrics-grid--product-intelligence,
 	.control-metrics,
+	.scheduler-status-grid,
 	.detail-meta__row {
 		grid-template-columns: repeat(2, minmax(0, 1fr));
 	}
@@ -1800,6 +1948,19 @@ h3 {
 
 	.settings-form {
 		grid-template-columns: repeat(2, minmax(0, 1fr));
+	}
+
+	.schedule-form {
+		grid-template-columns: repeat(2, minmax(0, 1fr));
+	}
+
+	.schedule-enabled-control {
+		margin-top: 0;
+	}
+
+	.scheduler-control-summary {
+		align-items: flex-start;
+		flex-wrap: wrap;
 	}
 
 	.management-action,
@@ -1884,7 +2045,9 @@ h3 {
 		.control-result-grid,
 		.single-scrape-form,
 		.discovery-search-form,
-		.workflow-steps {
+		.workflow-steps,
+		.scheduler-status-grid,
+		.schedule-form {
 		grid-template-columns: 1fr;
 	}
 
@@ -1951,6 +2114,21 @@ h3 {
 
 	.dialog-actions {
 		flex-direction: column-reverse;
+	}
+
+	.scheduler-context,
+	.scheduler-control-summary,
+	.scheduler-control-summary__facts {
+		align-items: stretch;
+		flex-direction: column;
+	}
+
+	.scheduler-control-summary > .button {
+		width: 100%;
+	}
+
+	.schedule-timezone {
+		align-self: flex-start;
 	}
 }
 

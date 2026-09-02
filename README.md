@@ -156,7 +156,7 @@ This project does not attempt to bypass platform protections, fake browser ident
 
 ## Data Quality
 
-- The `/data-quality` page provides operational visibility for every tracked URL before any automatic scheduling is introduced. It supports validated health, platform, active/paused, search, and sort controls with server-side pagination.
+- The `/data-quality` page provides operational visibility for every tracked URL. It supports validated health, platform, active/paused, search, and sort controls with server-side pagination.
 - Each watchlist item receives one mutually exclusive primary health state. The latest failed attempt maps its existing structured reason to `blocked`, `robots_denied`, `parse_failed`, `persistence_failed`, `invalid_data`, `unsupported_url`, or `other_failure`. A successful active item is `stale` when its last successful attempt exceeds `DATA_QUALITY_STALE_HOURS`; otherwise it is `healthy`. Items with no recorded outcome are `never_scraped`.
 - Summary health counts cover active tracked items only. `blocked` is reported separately from `failed`; the failed total combines parser, persistence, robots, invalid-data, unsupported-URL, and other failures. Paused items remain visible through filters but do not inflate active health totals or become stale.
 - The default stale threshold is 48 hours and can be changed through `DATA_QUALITY_STALE_HOURS`. Page size defaults to 25 through `DATA_QUALITY_PAGE_SIZE`.
@@ -170,10 +170,32 @@ This project does not attempt to bypass platform protections, fake browser ident
 - `Update Active Products` sends every active Watchlist URL through the existing Watchlist service and sequential batch workflow. `Update Selected` accepts checkbox-selected items, updates only active selections, and reports paused selections as skipped without activating them.
 - `Scrape One Product` validates a supported Trendyol or Hepsiburada product URL and sends it directly through the existing batch orchestration, ScrapeRun tracking, scraper, persistence, Listing, and PriceHistory flow. The URL does not need to be added to the Watchlist.
 - Control Center scraping defaults to Playwright, preserving the established Trendyol live-acquisition path. Hepsiburada may still return HTTP 403 or `blocked_by_platform`; these outcomes remain structured failures and are displayed without attempting a bypass.
-- A database check prevents a new Control Center operation when a ScrapeRun is already marked `running`. Execution remains synchronous and local; no scheduler, queue, worker, concurrency, or distributed lock has been added.
+- A database check prevents a new Control Center operation when a ScrapeRun is already marked `running`. Manual execution remains synchronous and local; automatic execution uses the same guard and remains sequential.
 - Recent Runs links to the existing ScrapeRun detail page, while Recent Failures reuses Data Quality's concise failure-reason mapping. Watchlist health, pause/activate, retry, product navigation, and non-destructive removal continue to use their existing services and routes.
 - Lightweight browser behavior disables submitted scraping buttons and shows an in-progress label to reduce accidental double-clicks. Backend validation and running-run checks remain authoritative.
 - The Product Discovery card links to the bounded Brand Discovery workflow. Discovery remains separate from normal scraping and only selected preview URLs enter the Watchlist.
+
+## Automatic Scheduling
+
+- The `/scheduler` page creates, edits, enables, disables, deletes, and immediately runs multiple daily Watchlist schedules. Daily times are interpreted with the `Europe/Istanbul` timezone rather than a fixed UTC offset.
+- Every automatic run and `Run Now` action calls the existing active Watchlist update service. That service excludes paused items and reuses the established Playwright, batch, `ScrapeRun`, persistence, `PriceHistory`, and Watchlist metadata pipeline.
+- Schedule definitions and their latest outcome metadata are stored in the `scrape_schedules` table. Enabled schedules are restored into APScheduler when `python run.py` starts the application.
+- The local application must remain open and running for jobs to execute. Scheduling does not continue while the executable or Flask process is closed.
+- Jobs use a 60-second misfire grace period with coalescing and one instance per job. Runs missed while the application is closed are not aggressively replayed after restart.
+- A process-level scheduler lock and the existing database running-run check prevent overlapping automatic scraping. Busy attempts are recorded as `skipped_busy`; an empty active Watchlist is recorded as `skipped_no_active_items` without creating a `ScrapeRun`.
+- Individual marketplace failures remain normal item-level outcomes. Trendyol continues through Playwright, while Hepsiburada may report HTTP 403 or `blocked_by_platform`; neither behavior is bypassed by scheduling.
+- The development launcher starts APScheduler once and disables Werkzeug's duplicate reloader process. The Flask application factory itself does not start background work, so `TESTING=True` and pytest remain deterministic.
+- Deleting a schedule removes only its configuration and in-memory job. Existing marketplace data, price history, and `ScrapeRun` history remain intact.
+
+### Manual Scheduler Test
+
+1. Start the local application with `python run.py` and keep that terminal and application process open.
+2. Open `/scheduler` and create an enabled daily schedule a few minutes in the future using Türkiye local time.
+3. Confirm the schedule appears as Enabled and has the expected Next Run value.
+4. Wait for the scheduled time, then open Scrape Runs and verify a normal `ScrapeRun` was created automatically.
+5. Confirm active Watchlist items received updated status metadata and successful Trendyol listings gained a new `PriceHistory` observation.
+6. Return to `/scheduler` and verify Last Run, Last Result, the linked ScrapeRun, and the following day's Next Run.
+7. If a Hepsiburada item is blocked, verify it appears as a normal item failure and that the schedule remains enabled for its next run.
 
 ## Brand Discovery / Catalog Import
 
@@ -198,10 +220,10 @@ This project does not attempt to bypass platform protections, fake browser ident
 All cleanup actions are POST-only, use named transactional service operations, report real deleted counts, and roll back completely if any step fails. They are rejected while a `ScrapeRun` is marked `running`.
 
 - **Clear Price History** deletes `PriceHistory` observations. It preserves products, sellers, listings, listing current prices, Watchlist items, scrape history, and settings.
-- **Clear Scrape History** deletes `ScrapeRunItem` and `ScrapeRun` records. It preserves marketplace data, price history, Watchlist items, and settings.
+- **Clear Scrape History** deletes `ScrapeRunItem` and `ScrapeRun` records. It preserves marketplace data, price history, Watchlist items, settings, and Scheduler configuration; schedule links to deleted runs are set to null.
 - **Clear Marketplace Data** deletes price history, listings, sellers, and products. It preserves Watchlist URLs, scrape history, and settings; Watchlist scrape timestamps/status/failure metadata reset so retained URLs correctly appear never scraped and can rebuild the dataset through the existing update flow.
 - **Clear Watchlist** deletes monitoring configuration only. Products, sellers, listings, price history, scrape history, and settings remain.
-- **Reset All Data** deletes products, sellers, listings, price history, Watchlist items, scrape runs, and run items. It preserves the SQLite schema and saved application settings, which can be reset separately. The backend requires the exact typed confirmation `RESET`.
+- **Reset All Data** deletes products, sellers, listings, price history, Watchlist items, scrape runs, and run items. It preserves the SQLite schema, saved application settings, and Scheduler configuration; schedule links to deleted runs are set to null. The backend requires the exact typed confirmation `RESET`.
 - Brand Discovery previews are temporary signed file-backed state, not database history, so no discovery table cleanup is needed.
 
 The current local Flask application does not include CSRF middleware. This change does not introduce authentication or a larger security framework; destructive actions remain POST-only with explicit dialogs and backend confirmation validation. Do not expose the development server to untrusted networks.
@@ -280,6 +302,8 @@ The existing `scrape_runs` model is also now used for real operational tracking.
 Brand Discovery adds no database tables or columns. Its unselected preview data expires from temporary server-side storage, while selected URLs use the existing `watchlist_items` table.
 
 Settings adds a new `app_settings` table only. Starting the app through `python run.py`, or another path that calls `initialize_database(app)`, runs `db.create_all()` and creates the table without deleting or recreating the existing SQLite database. No manual migration or data reset is required for this additive table.
+
+Automatic Scheduling adds the `scrape_schedules` table only. Install the updated requirements, then start the app through `python run.py`; the existing `initialize_database(app)` / `db.create_all()` path creates this table without deleting, recreating, or modifying collected Product, Watchlist, Listing, or PriceHistory data.
 
 If your existing local `data/watch_tracker.db` was created while `listings.seller_id` was still `NOT NULL`, you must recreate that local database before live smoke tests can persist seller-less listings.
 

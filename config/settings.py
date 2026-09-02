@@ -30,3 +30,6 @@ class Config:
 	DISCOVERY_ABSOLUTE_MAX_PRODUCTS = 200
 	DISCOVERY_PREVIEW_TTL_SECONDS = 30 * 60
 	DISCOVERY_STATE_DIR = Path(tempfile.gettempdir()) / "watch-price-tracker-discovery"
+	SCHEDULER_ENABLED = True
+	SCHEDULER_TIMEZONE = "Europe/Istanbul"
+	SCHEDULER_MISFIRE_GRACE_SECONDS = 60

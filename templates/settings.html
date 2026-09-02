@@ -52,7 +52,7 @@
 
 		<article class="management-action">
 			<div class="management-action__intro"><h3>Clear Scrape History</h3><p>Remove operational run records. Data Quality will safely fall back to Watchlist metadata and empty run states.</p><span class="record-count">{{ inventory.scrape_runs }} run(s), {{ inventory.scrape_run_items }} item result(s)</span></div>
-			<div class="scope-summary"><p><strong>Deletes:</strong> Scrape runs and item-level run results</p><p><strong>Keeps:</strong> Marketplace data, price history, Watchlist, settings</p></div>
+			<div class="scope-summary"><p><strong>Deletes:</strong> Scrape runs and item-level run results</p><p><strong>Keeps:</strong> Marketplace data, price history, Watchlist, settings, Scheduler configuration</p></div>
 			<button class="button button--danger-ghost" type="button" data-dialog-open="clear-scrape-dialog"{% if inventory.running_run_id %} disabled{% endif %}>Review Clear Scrape History</button>
 		</article>
 
@@ -71,8 +71,8 @@
 </section>
 
 <section class="card danger-zone" aria-labelledby="danger-zone-title">
-	<div><p class="eyebrow eyebrow--danger">Danger Zone</p><h2 id="danger-zone-title">Reset All Data</h2><p>This permanent action returns business and operational records to an empty state. The database schema and application settings remain intact.</p></div>
-	<div class="scope-summary scope-summary--danger"><p><strong>Deletes:</strong> Products, sellers, listings, price history, Watchlist, scrape runs and run items</p><p><strong>Keeps:</strong> Database schema, application settings, source code, configuration files, templates and assets</p></div>
+	<div><p class="eyebrow eyebrow--danger">Danger Zone</p><h2 id="danger-zone-title">Reset All Data</h2><p>This permanent action returns business and operational records to an empty state. The database schema, application settings, and Scheduler configuration remain intact.</p></div>
+	<div class="scope-summary scope-summary--danger"><p><strong>Deletes:</strong> Products, sellers, listings, price history, Watchlist, scrape runs and run items</p><p><strong>Keeps:</strong> Database schema, application settings, Scheduler configuration, source code, configuration files, templates and assets</p></div>
 	<button class="button button--danger-ghost" type="button" data-dialog-open="reset-all-dialog"{% if inventory.running_run_id %} disabled{% endif %}>Review Full Data Reset</button>
 </section>
 
@@ -89,7 +89,7 @@
 	<form method="post" action="{{ url_for('main.settings_clear_scrape_history') }}" data-submit-once>
 		<input type="hidden" name="confirmation" value="CLEAR_SCRAPE_HISTORY">
 		<p class="dialog-kicker">Permanent cleanup</p><h2 id="clear-scrape-title">Clear all scrape history?</h2>
-		<p>{{ inventory.scrape_runs }} run(s) and {{ inventory.scrape_run_items }} item result(s) will be removed. Marketplace and Watchlist data remain.</p>
+		<p>{{ inventory.scrape_runs }} run(s) and {{ inventory.scrape_run_items }} item result(s) will be removed. Marketplace, Watchlist, and Scheduler configuration remain; deleted run links are cleared.</p>
 		<div class="dialog-actions"><button class="button button--ghost" type="button" data-dialog-cancel>Cancel</button><button class="button button--danger-ghost" type="submit" data-submitting-label="Clearing...">Yes, Clear Scrape History</button></div>
 	</form>
 </dialog>
@@ -115,7 +115,7 @@
 <dialog id="reset-all-dialog" class="confirmation-dialog confirmation-dialog--danger" aria-labelledby="reset-all-title">
 	<form method="post" action="{{ url_for('main.settings_reset_all_data') }}" data-submit-once data-typed-confirmation="RESET">
 		<p class="dialog-kicker">Full permanent reset</p><h2 id="reset-all-title">Reset all local data?</h2>
-		<p>This clears every business and operational record. The database schema and saved application settings remain.</p>
+		<p>This clears every business and operational record. The database schema, saved application settings, and Scheduler configuration remain; deleted run links are cleared.</p>
 		<div class="form-field"><label for="reset-all-confirmation">Type exactly <code>RESET</code> to continue</label><input id="reset-all-confirmation" name="confirmation" type="text" autocomplete="off" spellcheck="false" data-confirmation-input></div>
 		<div class="dialog-actions"><button class="button button--ghost" type="button" data-dialog-cancel>Cancel</button><button class="button button--danger-ghost" type="submit" data-confirmation-submit data-submitting-label="Resetting..." disabled>Reset All Data</button></div>
 	</form>

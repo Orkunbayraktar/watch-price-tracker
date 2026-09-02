@@ -33,6 +33,18 @@ from services.scraping_control_service import (
 	update_all_active_products,
 	update_selected_products,
 )
+from services.scheduler_service import (
+	ScheduleNotFoundError,
+	SchedulerServiceError,
+	SchedulerValidationError,
+	create_daily_schedule,
+	delete_schedule,
+	get_schedule,
+	get_scheduler_page_data,
+	run_schedule_now,
+	set_schedule_enabled,
+	update_daily_schedule,
+)
 from services.settings_service import (
 	SETTING_DEFINITIONS,
 	SettingsServiceError,
@@ -185,6 +197,116 @@ def scraping_scrape_one() -> str:
 		logger.exception("Unexpected error while scraping one product from the Control Center")
 		flash("An unexpected error occurred while scraping this product.", "error")
 	return _render_scraping_control(manual_url=submitted_url)
+
+
+@main_bp.route("/scheduler")
+def scheduler_page() -> str:
+	"""Render persistent daily Watchlist schedules and scheduler status."""
+	return _render_scheduler_page()
+
+
+@main_bp.route("/scheduler", methods=["POST"])
+def create_schedule() -> str:
+	"""Validate and create one daily schedule."""
+	form_values = {
+		"name": request.form.get("name", ""),
+		"time_of_day": request.form.get("time_of_day", ""),
+		"is_enabled": request.form.get("is_enabled", "") == "on",
+	}
+	try:
+		create_daily_schedule(
+			form_values["name"],
+			form_values["time_of_day"],
+			is_enabled=form_values["is_enabled"],
+		)
+		flash("Daily schedule created.", "success")
+		return redirect(url_for("main.scheduler_page"))
+	except SchedulerValidationError as error:
+		return _render_scheduler_page(field_errors=error.field_errors, form_values=form_values), 400
+	except SchedulerServiceError as error:
+		flash(str(error), "error")
+	return _render_scheduler_page(form_values=form_values), 500
+
+
+@main_bp.route("/scheduler/<int:schedule_id>/edit", methods=["GET", "POST"])
+def edit_schedule(schedule_id: int) -> str:
+	"""Render or persist edits for an existing daily schedule."""
+	schedule = get_schedule(schedule_id)
+	if schedule is None:
+		abort(404)
+	if request.method == "GET":
+		return _render_scheduler_page(edit_schedule=schedule)
+
+	form_values = {
+		"name": request.form.get("name", ""),
+		"time_of_day": request.form.get("time_of_day", ""),
+		"is_enabled": request.form.get("is_enabled", "") == "on",
+	}
+	try:
+		update_daily_schedule(
+			schedule_id,
+			form_values["name"],
+			form_values["time_of_day"],
+			is_enabled=form_values["is_enabled"],
+		)
+		flash("Schedule updated.", "success")
+		return redirect(url_for("main.scheduler_page"))
+	except SchedulerValidationError as error:
+		return _render_scheduler_page(
+			edit_schedule=schedule,
+			field_errors=error.field_errors,
+			form_values=form_values,
+		), 400
+	except ScheduleNotFoundError:
+		abort(404)
+	except SchedulerServiceError as error:
+		flash(str(error), "error")
+	return _render_scheduler_page(edit_schedule=schedule, form_values=form_values), 500
+
+
+@main_bp.route("/scheduler/<int:schedule_id>/toggle", methods=["POST"])
+def toggle_schedule(schedule_id: int) -> str:
+	"""Enable or disable one persisted schedule."""
+	try:
+		schedule = get_schedule(schedule_id)
+		if schedule is None:
+			abort(404)
+		updated = set_schedule_enabled(schedule_id, not schedule.is_enabled)
+		flash(f"Schedule {'enabled' if updated.is_enabled else 'disabled'}.", "success")
+	except ScheduleNotFoundError:
+		abort(404)
+	except SchedulerServiceError as error:
+		flash(str(error), "error")
+	return redirect(url_for("main.scheduler_page"))
+
+
+@main_bp.route("/scheduler/<int:schedule_id>/run", methods=["POST"])
+def run_schedule(schedule_id: int) -> str:
+	"""Run one schedule immediately through the guarded Watchlist batch flow."""
+	try:
+		result = run_schedule_now(schedule_id)
+		category = "success" if result.status == "completed" else "warning"
+		if result.status == "failed":
+			category = "error"
+		flash(result.message, category)
+	except ScheduleNotFoundError:
+		abort(404)
+	except SchedulerServiceError as error:
+		flash(str(error), "error")
+	return redirect(url_for("main.scheduler_page"))
+
+
+@main_bp.route("/scheduler/<int:schedule_id>/delete", methods=["POST"])
+def remove_schedule(schedule_id: int) -> str:
+	"""Delete schedule configuration without deleting scraping history."""
+	try:
+		name = delete_schedule(schedule_id)
+		flash(f'Schedule "{name}" deleted. Scrape history was preserved.', "success")
+	except ScheduleNotFoundError:
+		abort(404)
+	except SchedulerServiceError as error:
+		flash(str(error), "error")
+	return redirect(url_for("main.scheduler_page"))
 
 
 @main_bp.route("/discovery")
@@ -505,6 +627,27 @@ def _render_scraping_control(*, action_result=None, manual_url: str = "") -> str
 		control=get_scraping_control_data(),
 		action_result=action_result,
 		manual_url=manual_url,
+	)
+
+
+def _render_scheduler_page(
+	*,
+	edit_schedule=None,
+	field_errors: dict[str, str] | None = None,
+	form_values: dict[str, object] | None = None,
+) -> str:
+	if form_values is None:
+		form_values = {
+			"name": "" if edit_schedule is None else edit_schedule.name,
+			"time_of_day": "" if edit_schedule is None else edit_schedule.time_of_day.strftime("%H:%M"),
+			"is_enabled": True if edit_schedule is None else edit_schedule.is_enabled,
+		}
+	return render_template(
+		"scheduler.html",
+		scheduler_page=get_scheduler_page_data(),
+		edit_schedule=edit_schedule,
+		field_errors=field_errors or {},
+		form_values=form_values,
 	)
 
 

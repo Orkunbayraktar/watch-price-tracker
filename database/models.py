@@ -198,3 +198,37 @@ class AppSetting(db.Model):
 		default=utc_now,
 		onupdate=utc_now,
 	)
+
+
+class ScrapeSchedule(db.Model):
+	"""Persistent configuration and outcome metadata for a daily Watchlist update."""
+
+	__tablename__ = "scrape_schedules"
+	__table_args__ = (
+		db.CheckConstraint("schedule_type = 'daily'", name="ck_scrape_schedule_daily_type"),
+		db.Index("ix_scrape_schedule_enabled_time", "is_enabled", "time_of_day"),
+	)
+
+	id = db.Column(db.Integer, primary_key=True)
+	name = db.Column(db.String(120), nullable=False)
+	is_enabled = db.Column(db.Boolean, nullable=False, default=True)
+	schedule_type = db.Column(db.String(20), nullable=False, default="daily")
+	time_of_day = db.Column(db.Time, nullable=False)
+	timezone = db.Column(db.String(64), nullable=False, default="Europe/Istanbul")
+	created_at = db.Column(db.DateTime(timezone=True), nullable=False, default=utc_now)
+	updated_at = db.Column(
+		db.DateTime(timezone=True),
+		nullable=False,
+		default=utc_now,
+		onupdate=utc_now,
+	)
+	last_run_at = db.Column(db.DateTime(timezone=True), nullable=True)
+	next_run_at = db.Column(db.DateTime(timezone=True), nullable=True)
+	last_run_status = db.Column(db.String(32), nullable=True)
+	last_scrape_run_id = db.Column(
+		db.Integer,
+		db.ForeignKey("scrape_runs.id", ondelete="SET NULL"),
+		nullable=True,
+	)
+
+	last_scrape_run = db.relationship("ScrapeRun", foreign_keys=[last_scrape_run_id])

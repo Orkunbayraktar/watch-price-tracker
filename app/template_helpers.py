@@ -2,9 +2,10 @@
 
 from __future__ import annotations
 
-from datetime import datetime, timezone
+from datetime import datetime, time, timezone
 from decimal import Decimal
 from urllib.parse import urlencode
+from zoneinfo import ZoneInfo
 
 from flask import Flask, request
 
@@ -50,6 +51,18 @@ def register_template_helpers(app: Flask) -> None:
 			value = value.replace(tzinfo=timezone.utc)
 		value = value.astimezone(timezone.utc)
 		return value.strftime("%Y-%m-%d %H:%M UTC")
+
+	@app.template_filter("format_istanbul_datetime")
+	def format_istanbul_datetime(value: datetime | None) -> str:
+		if value is None:
+			return "Not available"
+		if value.tzinfo is None:
+			value = value.replace(tzinfo=timezone.utc)
+		return value.astimezone(ZoneInfo("Europe/Istanbul")).strftime("%Y-%m-%d %H:%M")
+
+	@app.template_filter("format_schedule_time")
+	def format_schedule_time(value: time | None) -> str:
+		return "Not available" if value is None else value.strftime("%H:%M")
 
 	@app.template_filter("platform_label")
 	def platform_label(value: str | None) -> str:
@@ -125,6 +138,14 @@ def is_active_nav(section: str) -> bool:
 		"watchlist": {"main.watchlist", "main.add_watchlist_item", "main.toggle_watchlist_item", "main.remove_watchlist_item", "main.update_watchlist"},
 		"data_quality": {"main.data_quality", "main.retry_data_quality_item"},
 		"scraping": {"main.scraping_control", "main.scraping_update_active", "main.scraping_update_selected", "main.scraping_scrape_one"},
+		"scheduler": {
+			"main.scheduler_page",
+			"main.create_schedule",
+			"main.edit_schedule",
+			"main.toggle_schedule",
+			"main.run_schedule",
+			"main.remove_schedule",
+		},
 		"discovery": {"main.product_discovery", "main.preview_product_discovery", "main.add_product_discovery_selection"},
 		"import": {"main.import_data"},
 		"settings": {

@@ -1,0 +1,120 @@
+{% extends "base.html" %}
+
+{% block title %}Scheduler | Watch Price Tracker{% endblock %}
+{% block page_eyebrow %}Operations{% endblock %}
+{% block page_title %}Automatic Watchlist Updates{% endblock %}
+{% block page_description %}Create daily Istanbul-time schedules that reuse the existing active Watchlist batch workflow while this application is running.{% endblock %}
+{% block page_actions %}
+<a class="button button--ghost" href="{{ url_for('main.scraping_control') }}">Open Scraping Control</a>
+{% endblock %}
+
+{% block content %}
+<section class="metrics-grid scheduler-status-grid" aria-label="Scheduler status">
+	<article class="card metric-card">
+		<p class="metric-card__label">Scheduler</p>
+		<p class="metric-card__value metric-card__value--small"><span class="schedule-status-badge schedule-status-badge--{{ 'enabled' if scheduler_page.summary.is_running else 'disabled' }}">{{ 'Running' if scheduler_page.summary.is_running else 'Stopped' }}</span></p>
+	</article>
+	<article class="card metric-card">
+		<p class="metric-card__label">Enabled Schedules</p>
+		<p class="metric-card__value">{{ scheduler_page.summary.enabled_count }}</p>
+	</article>
+	<article class="card metric-card">
+		<p class="metric-card__label">Next Automatic Update</p>
+		<p class="metric-card__value metric-card__value--small">{{ scheduler_page.summary.next_run_at|format_istanbul_datetime }}</p>
+		<p class="metric-card__note">Europe/Istanbul</p>
+	</article>
+	<article class="card metric-card">
+		<p class="metric-card__label">Last Automatic Attempt</p>
+		<p class="metric-card__value metric-card__value--small">{{ scheduler_page.summary.last_run_at|format_istanbul_datetime }}</p>
+		<p class="metric-card__note">{{ scheduler_page.summary.last_run_status|replace('_', ' ')|title if scheduler_page.summary.last_run_status else 'No attempts yet' }}</p>
+	</article>
+</section>
+
+<section class="card scheduler-context" aria-label="Scheduler operation note">
+	<div>
+		<strong>The application must remain open.</strong>
+		<p>Daily jobs run inside this local process. Times missed while the application is closed are not replayed in bulk after restart.</p>
+	</div>
+	<span class="schedule-timezone">Türkiye time · Europe/Istanbul</span>
+</section>
+
+<section class="card data-section scheduler-form-card">
+	<div class="section-heading">
+		<div>
+			<p class="eyebrow">{{ 'Edit Schedule' if edit_schedule else 'Add Schedule' }}</p>
+			<h2>{{ edit_schedule.name if edit_schedule else 'Create a Daily Update' }}</h2>
+			<p class="section-copy">Choose one local time. Arbitrary cron expressions and overlapping jobs are intentionally not supported.</p>
+		</div>
+		{% if edit_schedule %}<a class="button button--ghost" href="{{ url_for('main.scheduler_page') }}">Cancel Edit</a>{% endif %}
+	</div>
+
+	<form class="schedule-form" method="post" action="{{ url_for('main.edit_schedule', schedule_id=edit_schedule.id) if edit_schedule else url_for('main.create_schedule') }}" data-submit-once>
+		<div class="form-field form-field--wide">
+			<label for="schedule-name">Name</label>
+			<input id="schedule-name" name="name" type="text" value="{{ form_values.name }}" maxlength="120" autocomplete="off" aria-describedby="schedule-name-help{% if field_errors.name %} schedule-name-error{% endif %}"{% if field_errors.name %} aria-invalid="true"{% endif %} required>
+			<p id="schedule-name-help" class="field-help">A clear label such as Morning Update or Evening Update.</p>
+			{% if field_errors.name %}<p id="schedule-name-error" class="field-error">{{ field_errors.name }}</p>{% endif %}
+		</div>
+		<div class="form-field">
+			<label for="schedule-time">Daily Time</label>
+			<input id="schedule-time" name="time_of_day" type="time" value="{{ form_values.time_of_day }}" step="60" aria-describedby="schedule-time-help{% if field_errors.time_of_day %} schedule-time-error{% endif %}"{% if field_errors.time_of_day %} aria-invalid="true"{% endif %} required>
+			<p id="schedule-time-help" class="field-help">24-hour time in Europe/Istanbul.</p>
+			{% if field_errors.time_of_day %}<p id="schedule-time-error" class="field-error">{{ field_errors.time_of_day }}</p>{% endif %}
+		</div>
+		<label class="schedule-enabled-control" for="schedule-enabled">
+			<input id="schedule-enabled" name="is_enabled" type="checkbox"{% if form_values.is_enabled %} checked{% endif %}>
+			<span><strong>Enabled</strong><small>Register this schedule for automatic updates.</small></span>
+		</label>
+		<div class="form-actions schedule-form__actions">
+			<button class="button button--primary" type="submit" data-submitting-label="Saving...">{{ 'Save Changes' if edit_schedule else 'Create Schedule' }}</button>
+		</div>
+	</form>
+</section>
+
+<section class="card data-section">
+	<div class="section-heading">
+		<div>
+			<h2>Existing Schedules</h2>
+			<p class="section-copy">Enabled rows are restored automatically when the local application starts.</p>
+		</div>
+	</div>
+
+	{% if scheduler_page.schedules %}
+	<div class="table-wrap">
+		<table class="data-table schedule-table">
+			<thead>
+				<tr><th scope="col">Name</th><th scope="col">Time</th><th scope="col">Status</th><th scope="col">Last Run</th><th scope="col">Next Run</th><th scope="col">Last Result</th><th scope="col">Actions</th></tr>
+			</thead>
+			<tbody>
+				{% for schedule in scheduler_page.schedules %}
+				<tr>
+					<td><strong>{{ schedule.name }}</strong><span class="table-meta schedule-type">Daily · {{ schedule.timezone }}</span></td>
+					<td><strong class="schedule-clock">{{ schedule.time_of_day|format_schedule_time }}</strong></td>
+					<td><span class="schedule-status-badge schedule-status-badge--{{ 'enabled' if schedule.is_enabled else 'disabled' }}">{{ 'Enabled' if schedule.is_enabled else 'Disabled' }}</span></td>
+					<td>{{ schedule.last_run_at|format_istanbul_datetime }}</td>
+					<td>{{ schedule.next_run_at|format_istanbul_datetime if schedule.is_enabled else 'Disabled' }}</td>
+					<td>
+						{% if schedule.last_run_status %}<span class="run-status-badge run-status-badge--{{ schedule.last_run_status }}">{{ schedule.last_run_status|replace('_', ' ')|title }}</span>{% else %}<span class="table-meta">No attempts yet</span>{% endif %}
+						{% if schedule.last_scrape_run_id %}<a class="table-link schedule-run-link" href="{{ url_for('main.scrape_run_detail', run_id=schedule.last_scrape_run_id) }}">Run {{ schedule.last_scrape_run_id }}</a>{% endif %}
+					</td>
+					<td>
+						<div class="table-actions schedule-actions">
+							<form method="post" action="{{ url_for('main.run_schedule', schedule_id=schedule.id) }}" data-submit-once><button class="button button--secondary button--compact" type="submit" data-submitting-label="Running...">Run Now</button></form>
+							<a class="button button--ghost button--compact" href="{{ url_for('main.edit_schedule', schedule_id=schedule.id) }}">Edit</a>
+							<form method="post" action="{{ url_for('main.toggle_schedule', schedule_id=schedule.id) }}"><button class="button button--ghost button--compact" type="submit">{{ 'Disable' if schedule.is_enabled else 'Enable' }}</button></form>
+							<form method="post" action="{{ url_for('main.remove_schedule', schedule_id=schedule.id) }}" data-confirm-message="Delete this schedule? Existing ScrapeRun and marketplace history will be kept."><button class="button button--danger-ghost button--compact" type="submit">Delete</button></form>
+						</div>
+					</td>
+				</tr>
+				{% endfor %}
+			</tbody>
+		</table>
+	</div>
+	{% else %}
+	<div class="empty-state">
+		<h3>No automatic schedules yet.</h3>
+		<p>Create a daily schedule above. Run Now and automatic jobs both use the same active Watchlist workflow.</p>
+	</div>
+	{% endif %}
+</section>
+{% endblock %}
