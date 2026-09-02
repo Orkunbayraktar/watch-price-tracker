@@ -102,7 +102,7 @@ def create_watchlist_item(url: str, display_name: str | None = None) -> Watchlis
 
 	platform = get_platform_for_url(canonical_url)
 	if platform is None:
-		raise WatchlistValidationError("Only Trendyol and Hepsiburada product URLs are supported.")
+		raise WatchlistValidationError("Only Trendyol, Hepsiburada, and Saat&Saat product URLs are supported.")
 
 	item = WatchlistItem(
 		platform=platform,
@@ -240,7 +240,7 @@ def validate_and_normalize_watchlist_url(url: str) -> str:
 	"""Validate and normalize one supported marketplace product URL."""
 	normalized_url = normalize_tracking_url(url)
 	if not normalized_url:
-		raise WatchlistValidationError("Enter a Trendyol or Hepsiburada product URL.")
+		raise WatchlistValidationError("Enter a Trendyol, Hepsiburada, or Saat&Saat product URL.")
 
 	parts = urlsplit(normalized_url)
 	if parts.scheme.lower() in {"javascript", "file"}:
@@ -252,7 +252,7 @@ def validate_and_normalize_watchlist_url(url: str) -> str:
 
 	platform = get_platform_for_url(normalized_url)
 	if platform is None:
-		raise WatchlistValidationError("Only supported Trendyol and Hepsiburada product URLs can be tracked.")
+		raise WatchlistValidationError("Only supported Trendyol, Hepsiburada, and Saat&Saat product URLs can be tracked.")
 
 	return normalized_url
 

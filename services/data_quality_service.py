@@ -66,7 +66,12 @@ STATUS_OPTIONS = (
 	(UNSUPPORTED_URL, "Unsupported URL"),
 	(OTHER_FAILURE, "Other Failure"),
 )
-PLATFORM_OPTIONS = (("all", "All platforms"), ("trendyol", "Trendyol"), ("hepsiburada", "Hepsiburada"))
+PLATFORM_OPTIONS = (
+	("all", "All platforms"),
+	("trendyol", "Trendyol"),
+	("hepsiburada", "Hepsiburada"),
+	("saatvesaat", "Saat&Saat"),
+)
 TRACKING_OPTIONS = (("all", "Active and paused"), ("active", "Active"), ("paused", "Paused"))
 SORT_OPTIONS = (
 	("worst", "Worst status first"),

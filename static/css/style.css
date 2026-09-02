@@ -529,6 +529,7 @@ h3 {
 .platform-badge {
 	display: inline-flex;
 	align-items: center;
+	white-space: nowrap;
 	padding: 0 var(--space-3);
 	min-height: 28px;
 	border-radius: 999px;
@@ -547,6 +548,12 @@ h3 {
 	background: #eef5ff;
 	border-color: #c9dbff;
 	color: #1d4ed8;
+}
+
+.platform-badge--saatvesaat {
+	background: #eaf7f4;
+	border-color: #b9ddd5;
+	color: #145f55;
 }
 
 .platform-badge--other {

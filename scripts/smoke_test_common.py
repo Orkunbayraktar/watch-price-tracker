@@ -42,12 +42,13 @@ def run_smoke_test(
 	label: str = "Smoke test",
 ) -> int:
 	"""Execute the scraper-to-database smoke test for one product URL."""
+	platform = scraper_class.platform
 	if not scraper_class.is_supported_url(url):
 		_print_failure(
 			"unsupported_url",
 			f"Provide a supported {platform_name} product URL.",
 			label=label,
-			platform=platform_name.lower(),
+			platform=platform,
 			fetcher_name=fetch_strategy,
 		)
 		return 2
@@ -62,7 +63,7 @@ def run_smoke_test(
 			return report_scrape_failure(
 				scraper,
 				label=label,
-				platform=platform_name.lower(),
+				platform=platform,
 				fetcher_name=fetch_strategy,
 			)
 
@@ -72,7 +73,7 @@ def run_smoke_test(
 				"invalid_data",
 				f"Critical scraped fields are missing: {', '.join(missing_fields)}",
 				label=label,
-				platform=platform_name.lower(),
+				platform=platform,
 				fetcher_name=fetch_strategy,
 			)
 			return 3
@@ -84,7 +85,7 @@ def run_smoke_test(
 				"persistence_failed",
 				str(error),
 				label=label,
-				platform=platform_name.lower(),
+				platform=platform,
 				fetcher_name=fetch_strategy,
 			)
 			return 4
@@ -94,7 +95,7 @@ def run_smoke_test(
 				"invalid_data",
 				"Persistence validation rejected the scraped product data.",
 				label=label,
-				platform=platform_name.lower(),
+				platform=platform,
 				fetcher_name=fetch_strategy,
 			)
 			return 5
@@ -105,7 +106,7 @@ def run_smoke_test(
 				"persistence_verification_failed",
 				"Database verification failed after persistence.",
 				label=label,
-				platform=platform_name.lower(),
+				platform=platform,
 				fetcher_name=fetch_strategy,
 			)
 			return 6

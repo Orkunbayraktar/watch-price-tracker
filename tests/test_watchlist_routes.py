@@ -63,7 +63,7 @@ def test_watchlist_empty_state_renders(client) -> None:
 	body = response.get_data(as_text=True)
 
 	assert "No products are being tracked yet." in body
-	assert "Add a Trendyol or Hepsiburada product URL to start monitoring prices." in body
+	assert "Add a Trendyol, Hepsiburada, or Saat&amp;Saat product URL to start monitoring prices." in body
 
 
 def test_valid_trendyol_url_can_be_added(client) -> None:
@@ -99,7 +99,7 @@ def test_unsupported_domain_is_rejected(client) -> None:
 	body = response.get_data(as_text=True)
 
 	assert response.status_code == 200
-	assert "Only supported Trendyol and Hepsiburada product URLs can be tracked." in body
+	assert "Only supported Trendyol, Hepsiburada, and Saat&amp;Saat product URLs can be tracked." in body
 	assert WatchlistItem.query.count() == 0
 
 

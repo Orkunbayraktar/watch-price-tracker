@@ -22,7 +22,7 @@ def build_argument_parser() -> argparse.ArgumentParser:
 	"""Create the CLI parser for the batch scraping command."""
 	parser = argparse.ArgumentParser(description="Run a controlled sequential batch scrape from a text file of product URLs.")
 	parser.add_argument("url_file", help="Path to a UTF-8 text file containing one product URL per line.")
-	parser.add_argument("--platform", choices=("trendyol", "hepsiburada"), help="Optional explicit platform for all URLs in the file.")
+	parser.add_argument("--platform", choices=("trendyol", "hepsiburada", "saatvesaat"), help="Optional explicit platform for all URLs in the file.")
 	parser.add_argument("--fetcher", default="playwright", choices=("requests", "playwright"), help="Explicit fetch strategy for each URL.")
 	parser.add_argument("--headed", action="store_true", help="Launch Playwright in headed mode for debugging.")
 	parser.add_argument("--debug-parser", action="store_true", help="Log concise parser context when critical fields cannot be extracted.")

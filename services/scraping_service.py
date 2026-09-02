@@ -7,6 +7,7 @@ import logging
 from scrapers.hepsiburada_scraper import HepsiburadaScraper
 from scrapers.models import ScrapedProductData
 from scrapers.product_page_scraper import ProductPageScraper
+from scrapers.saatvesaat_scraper import SaatVeSaatScraper
 from scrapers.trendyol_scraper import TrendyolScraper
 from services.persistence_service import PersistenceError, PersistenceResult, save_scraped_product
 
@@ -17,6 +18,7 @@ logger = logging.getLogger(__name__)
 SCRAPER_CLASSES: tuple[type[ProductPageScraper], ...] = (
 	TrendyolScraper,
 	HepsiburadaScraper,
+	SaatVeSaatScraper,
 )
 
 

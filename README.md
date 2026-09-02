@@ -1,10 +1,10 @@
 # Watch Price Tracker
 
-Watch Price Tracker is a Python-based project for tracking the prices of selected watch brands and models on Trendyol and Hepsiburada. The project is being developed as a university internship work-in-progress.
+Watch Price Tracker is a Python-based project for tracking the prices of selected watch brands and models on Trendyol, Hepsiburada, and Saat&Saat. The project is being developed as a university internship work-in-progress.
 
 ## Project Goal
 
-The goal of this project is to monitor selected watch brands and models on Trendyol and Hepsiburada and keep track of:
+The goal of this project is to monitor selected watch brands and models across supported marketplaces and keep track of:
 
 - prices
 - sellers
@@ -15,6 +15,7 @@ The goal of this project is to monitor selected watch brands and models on Trend
 
 - [x] Trendyol scraper
 - [x] Hepsiburada scraper
+- [x] Saat&Saat product provider (live status pending manual verification)
 - [x] robots.txt control
 - [x] SQLite database
 - [x] Product and seller records
@@ -89,6 +90,7 @@ python -m playwright install chromium
 This project is an actively developed university internship project.
 The current implementation includes a Trendyol single-product scraper proof of concept, not a full marketplace scraper.
 The current implementation also includes a Hepsiburada single-product scraper proof of concept, not a full marketplace scraper.
+The Saat&Saat single-product provider is integrated, but live acquisition remains pending manual verification against a current public product page.
 The local Flask interface now includes a read-only analytics dashboard with database-backed product, seller, and import views.
 It also includes a watchlist management screen for tracking supported marketplace product URLs directly from the browser.
 
@@ -96,7 +98,7 @@ It also includes a watchlist management screen for tracking supported marketplac
 
 Current data sources:
 
-- Web scraping adapters for Trendyol and Hepsiburada product pages
+- Web scraping adapters for Trendyol, Hepsiburada, and Saat&Saat product pages
 - CSV import into the shared normalized product format
 - Excel `.xlsx` import into the shared normalized product format
 
@@ -118,9 +120,10 @@ This project does not attempt to bypass platform protections, fake browser ident
 - Existing `robots.txt` checks still run before any product request. If robots access is denied or robots loading fails, the browser is not launched.
 - Browser mode uses normal Playwright Chromium only. No stealth plugin, CAPTCHA solving, proxy rotation, fingerprint spoofing, or private marketplace API replay is implemented.
 - Challenge and blocking pages are detected and reported as structured failures. The project does not try to solve or bypass those pages.
-- Both marketplaces use the same generic live path: robots.txt gate -> fetcher -> rendered HTML parser -> `ScrapedProductData` -> generic persistence -> SQLite.
-- Hepsiburada Playwright support stays inside that shared flow. The Hepsiburada parser can persist seller-less listings when the public product page does not visibly expose seller information.
-- A concrete Hepsiburada live success should only be claimed after you run the manual smoke test locally against a real product URL.
+- All supported product providers use the same generic live path: robots.txt gate -> fetcher -> rendered HTML parser -> `ScrapedProductData` -> generic persistence -> SQLite.
+- Trendyol: Playwright live acquisition is the established live path.
+- Hepsiburada: Playwright support stays inside the shared flow and may be blocked by the platform. The parser can persist seller-less listings when the public page does not visibly expose seller information.
+- Saat&Saat: the single-product provider uses the same Playwright-capable flow and can persist seller-less listings; live status remains pending manual verification.
 - Marketplace pages may still block anonymous browser automation even when a normal browser renderer is used.
 - CSV and XLSX import remain supported as a stable fallback data source when live acquisition is blocked.
 
@@ -140,7 +143,7 @@ This project does not attempt to bypass platform protections, fake browser ident
 
 ## Watchlist
 
-- The `/watchlist` page lets you add, pause, reactivate, and remove tracked Trendyol and Hepsiburada product URLs through the local Flask UI.
+- The `/watchlist` page lets you add, pause, reactivate, and remove tracked Trendyol, Hepsiburada, and Saat&Saat product URLs through the local Flask UI.
 - Watchlist entries represent monitored URLs only. Removing or pausing a watchlist item does not delete persisted `Product`, `Listing`, or `PriceHistory` records.
 - URL validation reuses the existing scraper registry and supported product URL checks, so unsupported domains, malformed URLs, and unsafe schemes are rejected before storage.
 - Duplicate tracked URLs are prevented through conservative canonicalization: whitespace is trimmed, scheme and host casing are normalized, and URL fragments are removed while seller/product query parameters remain intact when present.
@@ -168,7 +171,7 @@ This project does not attempt to bypass platform protections, fake browser ident
 
 - The `/scraping` page centralizes normal synchronous scraping operations in the Flask interface. It shows real active and paused Watchlist counts, the latest run, recent runs, structured failures, latest known prices, and Data Quality health states.
 - `Update Active Products` sends every active Watchlist URL through the existing Watchlist service and sequential batch workflow. `Update Selected` accepts checkbox-selected items, updates only active selections, and reports paused selections as skipped without activating them.
-- `Scrape One Product` validates a supported Trendyol or Hepsiburada product URL and sends it directly through the existing batch orchestration, ScrapeRun tracking, scraper, persistence, Listing, and PriceHistory flow. The URL does not need to be added to the Watchlist.
+- `Scrape One Product` validates a supported Trendyol, Hepsiburada, or Saat&Saat product URL and sends it directly through the existing batch orchestration, ScrapeRun tracking, scraper, persistence, Listing, and PriceHistory flow. The URL does not need to be added to the Watchlist.
 - Control Center scraping defaults to Playwright, preserving the established Trendyol live-acquisition path. Hepsiburada may still return HTTP 403 or `blocked_by_platform`; these outcomes remain structured failures and are displayed without attempting a bypass.
 - A database check prevents a new Control Center operation when a ScrapeRun is already marked `running`. Manual execution remains synchronous and local; automatic execution uses the same guard and remains sequential.
 - Recent Runs links to the existing ScrapeRun detail page, while Recent Failures reuses Data Quality's concise failure-reason mapping. Watchlist health, pause/activate, retry, product navigation, and non-destructive removal continue to use their existing services and routes.
@@ -183,7 +186,8 @@ This project does not attempt to bypass platform protections, fake browser ident
 - The local application must remain open and running for jobs to execute. Scheduling does not continue while the executable or Flask process is closed.
 - Jobs use a 60-second misfire grace period with coalescing and one instance per job. Runs missed while the application is closed are not aggressively replayed after restart.
 - A process-level scheduler lock and the existing database running-run check prevent overlapping automatic scraping. Busy attempts are recorded as `skipped_busy`; an empty active Watchlist is recorded as `skipped_no_active_items` without creating a `ScrapeRun`.
-- Individual marketplace failures remain normal item-level outcomes. Trendyol continues through Playwright, while Hepsiburada may report HTTP 403 or `blocked_by_platform`; neither behavior is bypassed by scheduling.
+- Active Saat&Saat items join Trendyol and Hepsiburada in the same Watchlist batch; no marketplace-specific scheduler job is created.
+- Individual marketplace failures remain normal item-level outcomes. Hepsiburada or Saat&Saat may report HTTP 403 or `blocked_by_platform`; neither behavior is bypassed by scheduling.
 - The development launcher starts APScheduler once and disables Werkzeug's duplicate reloader process. The Flask application factory itself does not start background work, so `TESTING=True` and pytest remain deterministic.
 - Deleting a schedule removes only its configuration and in-memory job. Existing marketplace data, price history, and `ScrapeRun` history remain intact.
 
@@ -258,6 +262,7 @@ Use the following generic live smoke test when you want to explicitly choose the
 python scripts/smoke_test_live.py --platform trendyol --fetcher requests "<TRENDYOL_PRODUCT_URL>"
 python scripts/smoke_test_live.py --platform trendyol --fetcher playwright "<TRENDYOL_PRODUCT_URL>"
 python scripts/smoke_test_live.py --platform hepsiburada --fetcher playwright "<HEPSIBURADA_PRODUCT_URL>"
+.\.venv\Scripts\python.exe scripts\smoke_test_live.py --platform saatvesaat --fetcher playwright "<SAAT_VE_SAAT_PRODUCT_URL>"
 ```
 
 For browser debugging you can add `--headed`, but headless mode remains the default and preferred smoke-test path.
@@ -286,6 +291,7 @@ Batch scraping currently runs sequentially on purpose. Each URL still goes throu
 - per-item failures do not roll back successful items from the same run
 - batch metadata and item-level results are stored through `ScrapeRun` and `ScrapeRunItem`
 - Hepsiburada URLs can be included, but platform-side HTTP 403 responses are recorded as normal failures and are not bypassed
+- Saat&Saat URLs use the same controlled batch path; live support remains pending manual verification
 
 The batch CLI prints a compact start summary, one line per processed URL, and a final result summary with the stored ScrapeRun ID.
 
@@ -298,6 +304,8 @@ Watchlist management adds a new `watchlist_items` table. If your local developme
 Batch scraping adds a new `scrape_run_items` table. If your local development database was created before this table existed, start the app or run any script path that calls `initialize_database(app)` so `db.create_all()` can create the missing table.
 
 The existing `scrape_runs` model is also now used for real operational tracking. No silent database deletion is performed by this change.
+
+Saat&Saat support uses the existing string platform columns and generic records. It requires no database migration or database recreation.
 
 Brand Discovery adds no database tables or columns. Its unselected preview data expires from temporary server-side storage, while selected URLs use the existing `watchlist_items` table.
 

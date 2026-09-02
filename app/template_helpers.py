@@ -13,6 +13,7 @@ from flask import Flask, request
 PLATFORM_LABELS = {
 	"trendyol": "Trendyol",
 	"hepsiburada": "Hepsiburada",
+	"saatvesaat": "Saat&Saat",
 }
 
 
@@ -78,6 +79,8 @@ def register_template_helpers(app: Flask) -> None:
 			return "platform-badge platform-badge--trendyol"
 		if normalized == "hepsiburada":
 			return "platform-badge platform-badge--hepsiburada"
+		if normalized == "saatvesaat":
+			return "platform-badge platform-badge--saatvesaat"
 		return "platform-badge platform-badge--other"
 
 	@app.template_filter("change_direction")

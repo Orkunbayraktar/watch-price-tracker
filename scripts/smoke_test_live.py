@@ -14,6 +14,7 @@ if str(PROJECT_ROOT) not in sys.path:
 
 
 from scrapers.hepsiburada_scraper import HepsiburadaScraper
+from scrapers.saatvesaat_scraper import SaatVeSaatScraper
 from scrapers.trendyol_scraper import TrendyolScraper
 from scripts.smoke_test_common import run_smoke_test
 
@@ -21,6 +22,7 @@ from scripts.smoke_test_common import run_smoke_test
 SCRAPER_BY_PLATFORM = {
 	"trendyol": (TrendyolScraper, "Trendyol"),
 	"hepsiburada": (HepsiburadaScraper, "Hepsiburada"),
+	"saatvesaat": (SaatVeSaatScraper, "Saat&Saat"),
 }
 
 
