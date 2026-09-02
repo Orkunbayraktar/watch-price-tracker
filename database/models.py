@@ -183,3 +183,18 @@ class ScrapeRunItem(db.Model):
 
 	scrape_run = db.relationship("ScrapeRun", back_populates="items")
 	listing = db.relationship("Listing")
+
+
+class AppSetting(db.Model):
+	"""Allowlisted user-editable local application setting."""
+
+	__tablename__ = "app_settings"
+
+	key = db.Column(db.String(80), primary_key=True)
+	value = db.Column(db.String(255), nullable=False)
+	updated_at = db.Column(
+		db.DateTime(timezone=True),
+		nullable=False,
+		default=utc_now,
+		onupdate=utc_now,
+	)

@@ -12,6 +12,7 @@ from sqlalchemy import and_, or_
 
 from database.db import db
 from database.models import Listing, Product, ScrapeRunItem, WatchlistItem
+from services.settings_service import get_setting_value
 
 
 DEFAULT_STALE_HOURS = 48
@@ -477,7 +478,7 @@ def _validated_choice(value: str | None, options: tuple[tuple[str, str], ...], d
 
 
 def _resolve_stale_hours(value: int | None) -> int:
-	configured = value if value is not None else current_app.config.get("DATA_QUALITY_STALE_HOURS", DEFAULT_STALE_HOURS)
+	configured = value if value is not None else get_setting_value("data_quality_stale_hours")
 	try:
 		return max(1, int(configured))
 	except (TypeError, ValueError):

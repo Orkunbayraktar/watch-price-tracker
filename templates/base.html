@@ -16,16 +16,28 @@
                 <p class="brand-copy">Retail price intelligence for marketplace watch listings.</p>
             </div>
 
-            <nav class="sidebar-nav">
-                <a class="sidebar-link{% if is_active_nav('dashboard') %} is-active{% endif %}" href="{{ url_for('main.index') }}">Dashboard</a>
-                <a class="sidebar-link{% if is_active_nav('watchlist') %} is-active{% endif %}" href="{{ url_for('main.watchlist') }}">Watchlist</a>
-                <a class="sidebar-link{% if is_active_nav('scraping') %} is-active{% endif %}" href="{{ url_for('main.scraping_control') }}">Scraping</a>
-                <a class="sidebar-link{% if is_active_nav('data_quality') %} is-active{% endif %}" href="{{ url_for('main.data_quality') }}">Data Quality</a>
-                <a class="sidebar-link{% if is_active_nav('products') %} is-active{% endif %}" href="{{ url_for('main.products') }}">Products</a>
-                <a class="sidebar-link{% if is_active_nav('sellers') %} is-active{% endif %}" href="{{ url_for('main.sellers') }}">Sellers</a>
-                <a class="sidebar-link{% if is_active_nav('scrape_runs') %} is-active{% endif %}" href="{{ url_for('main.scrape_runs') }}">Scrape Runs</a>
-                <a class="sidebar-link{% if is_active_nav('import') %} is-active{% endif %}" href="{{ url_for('main.import_data') }}">Import Data</a>
+            <nav class="sidebar-nav" aria-label="Application sections">
+                <section class="sidebar-nav__group" aria-labelledby="sidebar-analytics-label">
+                    <p class="sidebar-nav__label" id="sidebar-analytics-label">Analytics</p>
+                    <a class="sidebar-link{% if is_active_nav('dashboard') %} is-active{% endif %}" href="{{ url_for('main.index') }}">Dashboard</a>
+                    <a class="sidebar-link{% if is_active_nav('products') %} is-active{% endif %}" href="{{ url_for('main.products') }}">Products</a>
+                    <a class="sidebar-link{% if is_active_nav('sellers') %} is-active{% endif %}" href="{{ url_for('main.sellers') }}">Sellers</a>
+                </section>
+
+                <section class="sidebar-nav__group" aria-labelledby="sidebar-operations-label">
+                    <p class="sidebar-nav__label" id="sidebar-operations-label">Operations</p>
+                    <a class="sidebar-link{% if is_active_nav('watchlist') %} is-active{% endif %}" href="{{ url_for('main.watchlist') }}">Watchlist</a>
+                    <a class="sidebar-link{% if is_active_nav('scraping') %} is-active{% endif %}" href="{{ url_for('main.scraping_control') }}">Scraping</a>
+                    <a class="sidebar-link{% if is_active_nav('discovery') %} is-active{% endif %}" href="{{ url_for('main.product_discovery') }}">Brand Discovery</a>
+                    <a class="sidebar-link{% if is_active_nav('data_quality') %} is-active{% endif %}" href="{{ url_for('main.data_quality') }}">Data Quality</a>
+                    <a class="sidebar-link{% if is_active_nav('scrape_runs') %} is-active{% endif %}" href="{{ url_for('main.scrape_runs') }}">Scrape Runs</a>
+                    <a class="sidebar-link{% if is_active_nav('import') %} is-active{% endif %}" href="{{ url_for('main.import_data') }}">Import Data</a>
+                </section>
             </nav>
+
+            <div class="sidebar-footer">
+                <a class="sidebar-link{% if is_active_nav('settings') %} is-active{% endif %}" href="{{ url_for('main.settings_page') }}">Settings</a>
+            </div>
         </aside>
 
         <div class="app-main">

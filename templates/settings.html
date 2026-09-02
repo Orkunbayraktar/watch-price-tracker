@@ -1,0 +1,123 @@
+{% extends "base.html" %}
+
+{% block title %}Settings | Watch Price Tracker{% endblock %}
+{% block page_eyebrow %}Local Administration{% endblock %}
+{% block page_title %}Settings{% endblock %}
+{% block page_description %}Adjust a small set of safe application defaults and manage local records with explicit, reversible-in-scope controls.{% endblock %}
+
+{% block content %}
+{% if inventory.running_run_id %}
+<section class="operation-banner" role="status">
+	<div><strong>Data management is temporarily locked.</strong><p>Scraping run {{ inventory.running_run_id }} is active. Settings can still be edited, but records cannot be cleared until it finishes.</p></div>
+	<a class="button button--secondary" href="{{ url_for('main.scrape_run_detail', run_id=inventory.running_run_id) }}">Open Running Run</a>
+</section>
+{% endif %}
+
+<section class="card data-section settings-section">
+	<div class="section-heading">
+		<div><p class="eyebrow">Application Settings</p><h2>Safe Operating Defaults</h2><p class="section-copy">Only bounded, non-sensitive values are editable here. Network identity and anti-bot behavior are not exposed.</p></div>
+	</div>
+	<form class="settings-form" method="post" action="{{ url_for('main.save_application_settings') }}" data-submit-once>
+		{% for definition in setting_definitions %}
+		<div class="form-field settings-field">
+			<div class="settings-field__label-row"><label for="setting-{{ definition.key }}">{{ definition.label }}</label><span>{{ definition.unit }}</span></div>
+			<input id="setting-{{ definition.key }}" name="{{ definition.key }}" type="number" min="{{ definition.minimum }}" max="{{ definition.maximum }}" step="1" value="{{ form_values[definition.key] }}" required{% if field_errors.get(definition.key) %} aria-invalid="true"{% endif %} aria-describedby="setting-help-{{ definition.key }}{% if field_errors.get(definition.key) %} setting-error-{{ definition.key }}{% endif %}">
+			<p id="setting-help-{{ definition.key }}" class="field-help">{{ definition.help_text }} Allowed range: {{ definition.minimum }}-{{ definition.maximum }}.</p>
+			{% if field_errors.get(definition.key) %}<p id="setting-error-{{ definition.key }}" class="field-error">{{ field_errors[definition.key] }}</p>{% endif %}
+		</div>
+		{% endfor %}
+		<div class="form-actions settings-form__actions">
+			<button class="button button--primary" type="submit" data-submitting-label="Saving...">Save Settings</button>
+		</div>
+	</form>
+	<form method="post" action="{{ url_for('main.restore_application_settings') }}" data-confirm-message="Restore the configured defaults? Marketplace data and Watchlist items will not be changed.">
+		<button class="button button--ghost" type="submit">Restore Default Settings</button>
+	</form>
+</section>
+
+<section class="card data-section settings-section">
+	<div class="section-heading">
+		<div><p class="eyebrow">Data Management</p><h2>Clear Selected Local Data</h2><p class="section-copy">Each action has a fixed scope. Review what it deletes and keeps before confirming.</p></div>
+	</div>
+	<div class="data-inventory" aria-label="Current local record counts">
+		<span><strong>{{ inventory.products }}</strong> products</span><span><strong>{{ inventory.listings }}</strong> listings</span><span><strong>{{ inventory.price_history }}</strong> prices</span><span><strong>{{ inventory.watchlist_items }}</strong> tracked URLs</span><span><strong>{{ inventory.scrape_runs }}</strong> runs</span>
+	</div>
+
+	<div class="management-list">
+		<article class="management-action">
+			<div class="management-action__intro"><h3>Clear Price History</h3><p>Remove historical observations while keeping every listing's current price available.</p><span class="record-count">{{ inventory.price_history }} price record(s)</span></div>
+			<div class="scope-summary"><p><strong>Deletes:</strong> PriceHistory observations</p><p><strong>Keeps:</strong> Products, sellers, listings, current prices, Watchlist, settings</p></div>
+			<button class="button button--danger-ghost" type="button" data-dialog-open="clear-price-dialog"{% if inventory.running_run_id %} disabled{% endif %}>Review Clear Price History</button>
+		</article>
+
+		<article class="management-action">
+			<div class="management-action__intro"><h3>Clear Scrape History</h3><p>Remove operational run records. Data Quality will safely fall back to Watchlist metadata and empty run states.</p><span class="record-count">{{ inventory.scrape_runs }} run(s), {{ inventory.scrape_run_items }} item result(s)</span></div>
+			<div class="scope-summary"><p><strong>Deletes:</strong> Scrape runs and item-level run results</p><p><strong>Keeps:</strong> Marketplace data, price history, Watchlist, settings</p></div>
+			<button class="button button--danger-ghost" type="button" data-dialog-open="clear-scrape-dialog"{% if inventory.running_run_id %} disabled{% endif %}>Review Clear Scrape History</button>
+		</article>
+
+		<article class="management-action management-action--strong">
+			<div class="management-action__intro"><h3>Clear Marketplace Data</h3><p>Remove the collected catalog but keep tracked URLs ready for a clean rebuild. Watchlist scrape metadata resets to never scraped.</p><span class="record-count">{{ inventory.products }} products, {{ inventory.listings }} listings, {{ inventory.price_history }} prices</span></div>
+			<div class="scope-summary"><p><strong>Deletes:</strong> Products, sellers, listings, price history</p><p><strong>Keeps:</strong> Watchlist URLs, scrape history, settings</p></div>
+			<button class="button button--danger-ghost" type="button" data-dialog-open="clear-marketplace-dialog"{% if inventory.running_run_id %} disabled{% endif %}>Review Clear Marketplace Data</button>
+		</article>
+
+		<article class="management-action management-action--strong">
+			<div class="management-action__intro"><h3>Clear Watchlist</h3><p>Stop monitoring every tracked URL without deleting collected catalog or price history.</p><span class="record-count">{{ inventory.watchlist_items }} tracked URL(s)</span></div>
+			<div class="scope-summary"><p><strong>Deletes:</strong> Watchlist monitoring configuration</p><p><strong>Keeps:</strong> Products, sellers, listings, price history, scrape history, settings</p></div>
+			<button class="button button--danger-ghost" type="button" data-dialog-open="clear-watchlist-dialog"{% if inventory.running_run_id %} disabled{% endif %}>Review Clear Watchlist</button>
+		</article>
+	</div>
+</section>
+
+<section class="card danger-zone" aria-labelledby="danger-zone-title">
+	<div><p class="eyebrow eyebrow--danger">Danger Zone</p><h2 id="danger-zone-title">Reset All Data</h2><p>This permanent action returns business and operational records to an empty state. The database schema and application settings remain intact.</p></div>
+	<div class="scope-summary scope-summary--danger"><p><strong>Deletes:</strong> Products, sellers, listings, price history, Watchlist, scrape runs and run items</p><p><strong>Keeps:</strong> Database schema, application settings, source code, configuration files, templates and assets</p></div>
+	<button class="button button--danger-ghost" type="button" data-dialog-open="reset-all-dialog"{% if inventory.running_run_id %} disabled{% endif %}>Review Full Data Reset</button>
+</section>
+
+<dialog id="clear-price-dialog" class="confirmation-dialog" aria-labelledby="clear-price-title">
+	<form method="post" action="{{ url_for('main.settings_clear_price_history') }}" data-submit-once>
+		<input type="hidden" name="confirmation" value="CLEAR_PRICE_HISTORY">
+		<p class="dialog-kicker">Permanent cleanup</p><h2 id="clear-price-title">Clear {{ inventory.price_history }} price record(s)?</h2>
+		<p>Historical observations will be removed. Listings and their current prices will remain available.</p>
+		<div class="dialog-actions"><button class="button button--ghost" type="button" data-dialog-cancel>Cancel</button><button class="button button--danger-ghost" type="submit" data-submitting-label="Clearing...">Yes, Clear Price History</button></div>
+	</form>
+</dialog>
+
+<dialog id="clear-scrape-dialog" class="confirmation-dialog" aria-labelledby="clear-scrape-title">
+	<form method="post" action="{{ url_for('main.settings_clear_scrape_history') }}" data-submit-once>
+		<input type="hidden" name="confirmation" value="CLEAR_SCRAPE_HISTORY">
+		<p class="dialog-kicker">Permanent cleanup</p><h2 id="clear-scrape-title">Clear all scrape history?</h2>
+		<p>{{ inventory.scrape_runs }} run(s) and {{ inventory.scrape_run_items }} item result(s) will be removed. Marketplace and Watchlist data remain.</p>
+		<div class="dialog-actions"><button class="button button--ghost" type="button" data-dialog-cancel>Cancel</button><button class="button button--danger-ghost" type="submit" data-submitting-label="Clearing...">Yes, Clear Scrape History</button></div>
+	</form>
+</dialog>
+
+<dialog id="clear-marketplace-dialog" class="confirmation-dialog" aria-labelledby="clear-marketplace-title">
+	<form method="post" action="{{ url_for('main.settings_clear_marketplace_data') }}" data-submit-once data-typed-confirmation="CLEAR MARKETPLACE">
+		<p class="dialog-kicker">High-impact cleanup</p><h2 id="clear-marketplace-title">Clear marketplace data?</h2>
+		<p>Products, sellers, listings and price observations will be removed. Watchlist URLs remain and can rebuild the catalog.</p>
+		<div class="form-field"><label for="clear-marketplace-confirmation">Type <code>CLEAR MARKETPLACE</code> to continue</label><input id="clear-marketplace-confirmation" name="confirmation" type="text" autocomplete="off" spellcheck="false" data-confirmation-input></div>
+		<div class="dialog-actions"><button class="button button--ghost" type="button" data-dialog-cancel>Cancel</button><button class="button button--danger-ghost" type="submit" data-confirmation-submit data-submitting-label="Clearing..." disabled>Clear Marketplace Data</button></div>
+	</form>
+</dialog>
+
+<dialog id="clear-watchlist-dialog" class="confirmation-dialog" aria-labelledby="clear-watchlist-title">
+	<form method="post" action="{{ url_for('main.settings_clear_watchlist') }}" data-submit-once data-typed-confirmation="CLEAR WATCHLIST">
+		<p class="dialog-kicker">High-impact cleanup</p><h2 id="clear-watchlist-title">Clear the entire Watchlist?</h2>
+		<p>All monitoring configuration will be removed. Existing products, listings and price history remain.</p>
+		<div class="form-field"><label for="clear-watchlist-confirmation">Type <code>CLEAR WATCHLIST</code> to continue</label><input id="clear-watchlist-confirmation" name="confirmation" type="text" autocomplete="off" spellcheck="false" data-confirmation-input></div>
+		<div class="dialog-actions"><button class="button button--ghost" type="button" data-dialog-cancel>Cancel</button><button class="button button--danger-ghost" type="submit" data-confirmation-submit data-submitting-label="Clearing..." disabled>Clear Watchlist</button></div>
+	</form>
+</dialog>
+
+<dialog id="reset-all-dialog" class="confirmation-dialog confirmation-dialog--danger" aria-labelledby="reset-all-title">
+	<form method="post" action="{{ url_for('main.settings_reset_all_data') }}" data-submit-once data-typed-confirmation="RESET">
+		<p class="dialog-kicker">Full permanent reset</p><h2 id="reset-all-title">Reset all local data?</h2>
+		<p>This clears every business and operational record. The database schema and saved application settings remain.</p>
+		<div class="form-field"><label for="reset-all-confirmation">Type exactly <code>RESET</code> to continue</label><input id="reset-all-confirmation" name="confirmation" type="text" autocomplete="off" spellcheck="false" data-confirmation-input></div>
+		<div class="dialog-actions"><button class="button button--ghost" type="button" data-dialog-cancel>Cancel</button><button class="button button--danger-ghost" type="submit" data-confirmation-submit data-submitting-label="Resetting..." disabled>Reset All Data</button></div>
+	</form>
+</dialog>
+{% endblock %}

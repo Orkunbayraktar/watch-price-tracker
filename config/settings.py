@@ -25,3 +25,8 @@ class Config:
 	DATA_QUALITY_PAGE_SIZE = 25
 	IMPORT_PREVIEW_LIMIT = 20
 	IMPORT_STATE_DIR = Path(tempfile.gettempdir()) / "watch-price-tracker-imports"
+	DISCOVERY_MAX_PAGES = 3
+	DISCOVERY_MAX_PRODUCTS = 100
+	DISCOVERY_ABSOLUTE_MAX_PRODUCTS = 200
+	DISCOVERY_PREVIEW_TTL_SECONDS = 30 * 60
+	DISCOVERY_STATE_DIR = Path(tempfile.gettempdir()) / "watch-price-tracker-discovery"

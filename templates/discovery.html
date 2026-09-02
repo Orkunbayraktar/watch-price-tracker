@@ -1,0 +1,143 @@
+{% extends "base.html" %}
+
+{% block title %}Brand Discovery | Watch Price Tracker{% endblock %}
+{% block page_eyebrow %}Catalog Import{% endblock %}
+{% block page_title %}Brand Discovery{% endblock %}
+{% block page_description %}Discover a bounded public marketplace catalog, review product URLs, and add only selected items to the Watchlist.{% endblock %}
+{% block page_actions %}
+<a class="button button--ghost" href="{{ url_for('main.scraping_control') }}">Back to Scraping</a>
+{% endblock %}
+
+{% block content %}
+<ol class="workflow-steps" aria-label="Discovery workflow">
+	<li class="is-current"><span>1</span><div><strong>Discover</strong><small>Choose marketplace and brand</small></div></li>
+	<li class="{% if discovery_result %}is-current{% endif %}"><span>2</span><div><strong>Review</strong><small>Inspect and select results</small></div></li>
+	<li class="{% if add_result %}is-current{% endif %}"><span>3</span><div><strong>Add</strong><small>Send selections to Watchlist</small></div></li>
+</ol>
+
+<section class="card data-section discovery-search-card">
+	<div class="section-heading">
+		<div>
+			<p class="eyebrow">Step 1</p>
+			<h2>Find a Brand Catalog</h2>
+			<p class="section-copy">Discovery checks robots.txt before every sequential page request. Detailed product pages are not opened at this stage.</p>
+		</div>
+	</div>
+	<form class="discovery-search-form" method="post" action="{{ url_for('main.preview_product_discovery') }}" data-submit-once>
+		<div class="form-field">
+			<label for="discovery-platform">Marketplace</label>
+			<select id="discovery-platform" name="platform" required>
+				<option value="trendyol"{% if form_values.platform == 'trendyol' %} selected{% endif %}>Trendyol</option>
+				<option value="hepsiburada"{% if form_values.platform == 'hepsiburada' %} selected{% endif %}>Hepsiburada</option>
+			</select>
+		</div>
+		<div class="form-field form-field--wide">
+			<label for="discovery-brand">Brand</label>
+			<input id="discovery-brand" name="brand" type="text" value="{{ form_values.brand }}" maxlength="120" autocomplete="off" placeholder="Casio" required aria-describedby="discovery-brand-help">
+			<p id="discovery-brand-help" class="field-help">The provider URL-encodes this value and keeps navigation on the selected marketplace host.</p>
+		</div>
+		<div class="form-field">
+			<label for="discovery-max-products">Maximum products</label>
+			<input id="discovery-max-products" name="max_products" type="number" min="1" max="{{ max_products_limit }}" value="{{ form_values.max_products }}" required>
+		</div>
+		<div class="form-actions">
+			<button class="button button--primary" type="submit" data-submitting-label="Discovering...">Discover Products</button>
+		</div>
+	</form>
+</section>
+
+{% if discovery_result %}
+<section class="discovery-outcome discovery-outcome--{{ 'success' if discovery_result.status == 'success' else 'error' }}" role="status" aria-live="polite">
+	<div>
+		<strong>{% if discovery_result.status == 'success' %}{{ discovery_result.message }}{% elif discovery_result.failure_reason == 'blocked_by_platform' %}Blocked by platform{% else %}Discovery could not continue{% endif %}</strong>
+		<p>{{ discovery_result.platform|platform_label }} / {{ discovery_result.brand }}{% if discovery_result.failure_reason %} / {{ discovery_result.failure_reason }}{% endif %}</p>
+	</div>
+	<div class="discovery-outcome__stats">
+		<span><strong>{{ discovery_result.pages_scanned }}</strong> pages</span>
+		<span><strong>{{ discovery_result.discovered_count }}</strong> products</span>
+	</div>
+</section>
+
+{% if discovery_result.status != 'success' %}
+<section class="card empty-state discovery-error-state">
+	<h2>
+		{% if discovery_result.failure_reason == 'invalid_brand' %}Invalid brand
+		{% elif discovery_result.failure_reason == 'robots_denied' %}robots.txt denied discovery
+		{% elif discovery_result.failure_reason == 'robots_load_failed' %}robots.txt unavailable
+		{% elif discovery_result.failure_reason == 'blocked_by_platform' %}Blocked by platform
+		{% elif discovery_result.failure_reason == 'timeout' %}Discovery timed out
+		{% elif discovery_result.failure_reason == 'unsupported_platform' %}Unsupported platform
+		{% else %}Discovery parse failed{% endif %}
+	</h2>
+	<p>{{ discovery_result.message }}</p>
+</section>
+{% elif discovery_result.products %}
+<section class="card data-section discovery-preview" data-discovery-preview>
+	<div class="section-heading discovery-preview__heading">
+		<div>
+			<p class="eyebrow">Step 2</p>
+			<h2>Review Discovered Products</h2>
+			<p class="section-copy">Preview prices are informational only. They do not create listings or PriceHistory observations.</p>
+		</div>
+		<div class="form-field discovery-filter-field">
+			<label for="discovery-filter">Filter results</label>
+			<input id="discovery-filter" type="search" placeholder="Product name or model" data-discovery-filter>
+		</div>
+	</div>
+
+	<form id="discovery-add-form" method="post" action="{{ url_for('main.add_product_discovery_selection') }}" data-submit-once>
+		<input type="hidden" name="preview_token" value="{{ preview_token }}">
+	</form>
+	<div class="table-wrap">
+		<table class="data-table discovery-table">
+			<thead>
+				<tr>
+					<th scope="col" class="selection-cell"><input class="control-checkbox" type="checkbox" aria-label="Select all untracked discovered products" data-discovery-select-all></th>
+					<th scope="col">Product</th><th scope="col">Platform</th><th scope="col">Preview Price</th><th scope="col">External Product ID</th><th scope="col">Watchlist Status</th>
+				</tr>
+			</thead>
+			<tbody>
+				{% for product in discovery_result.products %}
+				<tr data-discovery-row data-filter-text="{{ (product.product_name or '')|lower }} {{ (product.external_product_id or '')|lower }} {{ (product.brand or '')|lower }}">
+					<td class="selection-cell">
+						<label class="sr-only" for="discovered-product-{{ loop.index }}">Select {{ product.product_name or product.external_product_id or 'discovered product' }}</label>
+						<input id="discovered-product-{{ loop.index }}" class="control-checkbox" type="checkbox" name="selected_urls" value="{{ product.product_url }}" form="discovery-add-form" data-discovery-item{% if product.product_url in tracked_urls %} disabled{% endif %}>
+					</td>
+					<td><div class="discovery-product"><strong>{{ product.product_name or 'Product metadata unavailable' }}</strong>{% if product.brand %}<span>{{ product.brand }}</span>{% endif %}<a href="{{ product.product_url }}" target="_blank" rel="noopener noreferrer">Open marketplace page</a></div></td>
+					<td><span class="{{ product.platform|platform_badge_class }}">{{ product.platform|platform_label }}</span></td>
+					<td>{% if product.current_price %}{% if product.currency %}{{ product.current_price|format_price(product.currency) }}{% else %}{{ product.current_price }}{% endif %}{% else %}<span class="table-meta">Not visible</span>{% endif %}</td>
+					<td><code>{{ product.external_product_id or 'Not available' }}</code></td>
+					<td>{% if product.product_url in tracked_urls %}<span class="tracking-status-badge tracking-status-badge--paused">Already tracked</span>{% else %}<span class="tracking-status-badge tracking-status-badge--active">Ready to add</span>{% endif %}</td>
+				</tr>
+				{% endfor %}
+			</tbody>
+		</table>
+	</div>
+	<div class="discovery-selection-bar">
+		<div><strong><span data-discovery-selection-count>0</span> selected</strong><p>Only selected, untracked products will be added.</p></div>
+		<button class="button button--primary" type="submit" form="discovery-add-form" data-discovery-submit data-submitting-label="Adding..." disabled>Add Selected to Watchlist</button>
+	</div>
+</section>
+{% else %}
+<section class="card empty-state discovery-no-results">
+	<h2>No products found</h2>
+	<p>The allowed discovery pages returned no supported product URLs for this brand. Try checking the brand spelling or using the other marketplace.</p>
+</section>
+{% endif %}
+{% endif %}
+
+{% if add_result %}
+<section class="card result-card discovery-add-result" aria-live="polite">
+	<div class="section-heading">
+		<div><p class="eyebrow">Step 3</p><h2>Watchlist Import Complete</h2><p class="section-copy">{{ add_result.added_count }} added, {{ add_result.already_tracked }} already tracked, {{ add_result.skipped }} safely skipped.</p></div>
+		<a class="button button--ghost" href="{{ url_for('main.watchlist') }}">Open Watchlist</a>
+	</div>
+	{% if add_result.added_item_ids %}
+	<form method="post" action="{{ url_for('main.scraping_update_selected') }}" data-submit-once>
+		{% for item_id in add_result.added_item_ids %}<input type="hidden" name="item_ids" value="{{ item_id }}">{% endfor %}
+		<button class="button button--secondary" type="submit" data-submitting-label="Updating...">Update Added Products</button>
+	</form>
+	{% endif %}
+</section>
+{% endif %}
+{% endblock %}

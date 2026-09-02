@@ -5,9 +5,23 @@ import logging
 from flask import Blueprint, abort, current_app, flash, redirect, render_template, request, url_for
 from werkzeug.exceptions import RequestEntityTooLarge
 
+from discovery import DiscoveryResult
+from services.data_management_service import (
+	DataManagementBlockedError,
+	DataManagementConfirmationError,
+	DataManagementError,
+	clear_marketplace_data,
+	clear_price_history,
+	clear_scrape_history,
+	clear_watchlist,
+	get_data_inventory,
+	reset_all_data,
+)
 from services.dashboard_service import get_dashboard_data
 from services.data_quality_service import failure_message, get_data_quality_page
 from services.import_service import ImportServiceError, commit_import, preview_import
+from services.discovery_preview_store import DiscoveryPreviewError, DiscoveryPreviewStore
+from services.product_discovery_service import add_discovered_products, discover_products, get_tracked_discovery_urls
 from services.price_analysis_service import get_product_price_intelligence_page
 from services.product_service import list_products
 from services.scrape_run_service import get_recent_scrape_run_summaries, get_scrape_run_detail
@@ -18,6 +32,14 @@ from services.scraping_control_service import (
 	scrape_one_product,
 	update_all_active_products,
 	update_selected_products,
+)
+from services.settings_service import (
+	SETTING_DEFINITIONS,
+	SettingsServiceError,
+	SettingsValidationError,
+	get_application_settings,
+	restore_default_settings,
+	update_application_settings,
 )
 from services.seller_service import get_seller_detail, list_sellers
 from services.watchlist_service import (
@@ -163,6 +185,144 @@ def scraping_scrape_one() -> str:
 		logger.exception("Unexpected error while scraping one product from the Control Center")
 		flash("An unexpected error occurred while scraping this product.", "error")
 	return _render_scraping_control(manual_url=submitted_url)
+
+
+@main_bp.route("/discovery")
+def product_discovery() -> str:
+	"""Render the read-only brand discovery workflow."""
+	return _render_discovery_page()
+
+
+@main_bp.route("/discovery/preview", methods=["POST"])
+def preview_product_discovery() -> str:
+	"""Run bounded marketplace discovery and store its preview server-side."""
+	platform = request.form.get("platform", "trendyol")
+	brand = request.form.get("brand", "")
+	application_settings = get_application_settings()
+	max_products = request.form.get("max_products", application_settings.discovery_max_products)
+	try:
+		result = discover_products(
+			platform,
+			brand,
+			max_products=max_products,
+			max_pages=application_settings.discovery_max_pages,
+			absolute_max_products=current_app.config["DISCOVERY_ABSOLUTE_MAX_PRODUCTS"],
+		)
+		preview_token = _discovery_preview_store().save(result) if result.status == "success" else None
+	except Exception:
+		logger.exception("Unexpected error while discovering marketplace products")
+		result = DiscoveryResult(
+			platform=platform.strip().lower(),
+			brand=" ".join(brand.split()),
+			status="failed",
+			source_url=None,
+			failure_reason="discovery_parse_failed",
+			message="The discovery operation could not be completed safely.",
+		)
+		preview_token = None
+	return _render_discovery_page(
+		discovery_result=result,
+		preview_token=preview_token,
+		form_values={"platform": platform, "brand": brand, "max_products": str(max_products)},
+	)
+
+
+@main_bp.route("/discovery/add", methods=["POST"])
+def add_product_discovery_selection() -> str:
+	"""Add explicitly selected preview products through the Watchlist service."""
+	preview_token = request.form.get("preview_token", "")
+	try:
+		result = _discovery_preview_store().load(preview_token)
+		add_result = add_discovered_products(result, request.form.getlist("selected_urls"))
+	except DiscoveryPreviewError as error:
+		flash(str(error), "warning")
+		return _render_discovery_page()
+	except Exception:
+		logger.exception("Unexpected error while adding discovery selections")
+		flash("An unexpected error occurred while adding selected products.", "error")
+		return _render_discovery_page()
+
+	if add_result.added_count:
+		flash(f"{add_result.added_count} selected product(s) added to the Watchlist.", "success")
+	elif not request.form.getlist("selected_urls"):
+		flash("Select at least one new product to add to the Watchlist.", "warning")
+	else:
+		flash("No new products were added. The selection was already tracked or invalid.", "warning")
+	return _render_discovery_page(
+		discovery_result=result,
+		preview_token=preview_token,
+		add_result=add_result,
+		form_values={"platform": result.platform, "brand": result.brand, "max_products": str(result.discovered_count or get_application_settings().discovery_max_products)},
+	)
+
+
+@main_bp.route("/settings")
+def settings_page() -> str:
+	"""Render editable application settings and safe data controls."""
+	return _render_settings_page()
+
+
+@main_bp.route("/settings/application", methods=["POST"])
+def save_application_settings() -> str:
+	"""Validate and persist the allowlisted editable settings."""
+	try:
+		update_application_settings(request.form)
+		flash("Application settings saved.", "success")
+		return redirect(url_for("main.settings_page"))
+	except SettingsValidationError as error:
+		return _render_settings_page(
+			field_errors=error.field_errors,
+			form_values={definition.key: request.form.get(definition.key, "") for definition in SETTING_DEFINITIONS},
+		)
+	except SettingsServiceError as error:
+		flash(str(error), "error")
+	return _render_settings_page()
+
+
+@main_bp.route("/settings/application/defaults", methods=["POST"])
+def restore_application_settings() -> str:
+	"""Remove editable overrides without deleting application data."""
+	try:
+		restore_default_settings()
+		flash("Default application settings restored. No marketplace data was changed.", "success")
+	except SettingsServiceError as error:
+		flash(str(error), "error")
+	return redirect(url_for("main.settings_page"))
+
+
+@main_bp.route("/settings/data/price-history", methods=["POST"])
+def settings_clear_price_history() -> str:
+	return _run_data_management_action(clear_price_history, "CLEAR_PRICE_HISTORY")
+
+
+@main_bp.route("/settings/data/scrape-history", methods=["POST"])
+def settings_clear_scrape_history() -> str:
+	return _run_data_management_action(clear_scrape_history, "CLEAR_SCRAPE_HISTORY")
+
+
+@main_bp.route("/settings/data/marketplace", methods=["POST"])
+def settings_clear_marketplace_data() -> str:
+	return _run_data_management_action(clear_marketplace_data, "CLEAR MARKETPLACE")
+
+
+@main_bp.route("/settings/data/watchlist", methods=["POST"])
+def settings_clear_watchlist() -> str:
+	return _run_data_management_action(clear_watchlist, "CLEAR WATCHLIST")
+
+
+@main_bp.route("/settings/data/reset", methods=["POST"])
+def settings_reset_all_data() -> str:
+	"""Reset all business data only after exact backend typed confirmation."""
+	try:
+		result = reset_all_data(request.form.get("confirmation", ""))
+		flash(result.message, "success")
+	except DataManagementConfirmationError as error:
+		flash(str(error), "error")
+	except DataManagementBlockedError as error:
+		flash(str(error), "warning")
+	except DataManagementError as error:
+		flash(str(error), "error")
+	return redirect(url_for("main.settings_page"))
 
 
 @main_bp.route("/sellers/<int:seller_id>")
@@ -345,6 +505,68 @@ def _render_scraping_control(*, action_result=None, manual_url: str = "") -> str
 		control=get_scraping_control_data(),
 		action_result=action_result,
 		manual_url=manual_url,
+	)
+
+
+def _render_discovery_page(
+	*,
+	discovery_result=None,
+	preview_token: str | None = None,
+	add_result=None,
+	form_values: dict[str, str] | None = None,
+) -> str:
+	tracked_urls = get_tracked_discovery_urls(discovery_result.products) if discovery_result is not None else set()
+	application_settings = get_application_settings()
+	return render_template(
+		"discovery.html",
+		discovery_result=discovery_result,
+		preview_token=preview_token,
+		tracked_urls=tracked_urls,
+		add_result=add_result,
+		form_values=form_values or {
+			"platform": "trendyol",
+			"brand": "",
+			"max_products": str(application_settings.discovery_max_products),
+		},
+		max_products_limit=current_app.config["DISCOVERY_ABSOLUTE_MAX_PRODUCTS"],
+	)
+
+
+def _render_settings_page(
+	*,
+	field_errors: dict[str, str] | None = None,
+	form_values: dict[str, str] | None = None,
+) -> str:
+	settings = get_application_settings()
+	return render_template(
+		"settings.html",
+		application_settings=settings,
+		setting_definitions=SETTING_DEFINITIONS,
+		inventory=get_data_inventory(),
+		field_errors=field_errors or {},
+		form_values=form_values or {key: str(value) for key, value in settings.to_dict().items()},
+	)
+
+
+def _run_data_management_action(operation, expected_confirmation: str):
+	if request.form.get("confirmation", "") != expected_confirmation:
+		flash("The confirmation did not match. No data was deleted.", "error")
+		return redirect(url_for("main.settings_page"))
+	try:
+		result = operation()
+		flash(result.message, "success")
+	except DataManagementBlockedError as error:
+		flash(str(error), "warning")
+	except DataManagementError as error:
+		flash(str(error), "error")
+	return redirect(url_for("main.settings_page"))
+
+
+def _discovery_preview_store() -> DiscoveryPreviewStore:
+	return DiscoveryPreviewStore(
+		current_app.config["DISCOVERY_STATE_DIR"],
+		current_app.config["SECRET_KEY"],
+		current_app.config["DISCOVERY_PREVIEW_TTL_SECONDS"],
 	)
 
 

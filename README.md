@@ -173,7 +173,38 @@ This project does not attempt to bypass platform protections, fake browser ident
 - A database check prevents a new Control Center operation when a ScrapeRun is already marked `running`. Execution remains synchronous and local; no scheduler, queue, worker, concurrency, or distributed lock has been added.
 - Recent Runs links to the existing ScrapeRun detail page, while Recent Failures reuses Data Quality's concise failure-reason mapping. Watchlist health, pause/activate, retry, product navigation, and non-destructive removal continue to use their existing services and routes.
 - Lightweight browser behavior disables submitted scraping buttons and shows an in-progress label to reduce accidental double-clicks. Backend validation and running-run checks remain authoritative.
-- **Brand / Catalog Discovery — planned.** The Control Center includes a non-functional Product Discovery placeholder so a future permitted discovery and preview flow can feed selected URLs into the existing Watchlist service. No brand, category, search-page, or catalog crawler exists yet.
+- The Product Discovery card links to the bounded Brand Discovery workflow. Discovery remains separate from normal scraping and only selected preview URLs enter the Watchlist.
+
+## Brand Discovery / Catalog Import
+
+- The `/discovery` page lets users choose Trendyol or Hepsiburada, enter a brand, and preview public marketplace product-card metadata before adding anything.
+- Trendyol is the primary discovery provider. It builds provider-controlled public search URLs, scans pages sequentially, and applies the configured `DISCOVERY_MAX_PAGES` and `DISCOVERY_MAX_PRODUCTS` limits.
+- Hepsiburada uses the same provider contract. Live discovery may return `blocked_by_platform`; this is reported as a normal operational restriction and no bypass is attempted.
+- Every discovery page is checked through the existing fail-safe robots.txt manager before fetching. A robots denial or load failure prevents the marketplace request.
+- Preview results are kept temporarily in signed, expiring server-side files. The Flask cookie never contains the discovered catalog payload.
+- Already tracked canonical URLs are marked and cannot be selected. New selections are validated and added through the existing Watchlist service, so duplicate handling stays centralized.
+- Discovery prices and names are preview metadata only. They do not create `Product`, `Listing`, or `PriceHistory` records; normal Watchlist or Control Center scraping remains responsible for detailed persistence.
+- After import, `Update Added Products` is available as a separate explicit action. Discovery never automatically scrapes or adds the full result set.
+
+## Settings
+
+- The `/settings` page exposes only three bounded, non-sensitive values: the Data Quality stale threshold, Brand Discovery page limit, and default discovery product limit.
+- Values are validated server-side and stored as allowlisted rows in the `app_settings` table. Environment-sensitive values, browser identity, proxy behavior, and anti-bot options are not editable in the UI.
+- Data Quality and Brand Discovery read the effective persisted settings immediately. Discovery remains sequential and its hard product ceiling remains 200.
+- `Restore Default Settings` removes only these editable overrides and returns to the configured Python defaults. It does not delete marketplace, Watchlist, price, or scrape data.
+
+## Data Management
+
+All cleanup actions are POST-only, use named transactional service operations, report real deleted counts, and roll back completely if any step fails. They are rejected while a `ScrapeRun` is marked `running`.
+
+- **Clear Price History** deletes `PriceHistory` observations. It preserves products, sellers, listings, listing current prices, Watchlist items, scrape history, and settings.
+- **Clear Scrape History** deletes `ScrapeRunItem` and `ScrapeRun` records. It preserves marketplace data, price history, Watchlist items, and settings.
+- **Clear Marketplace Data** deletes price history, listings, sellers, and products. It preserves Watchlist URLs, scrape history, and settings; Watchlist scrape timestamps/status/failure metadata reset so retained URLs correctly appear never scraped and can rebuild the dataset through the existing update flow.
+- **Clear Watchlist** deletes monitoring configuration only. Products, sellers, listings, price history, scrape history, and settings remain.
+- **Reset All Data** deletes products, sellers, listings, price history, Watchlist items, scrape runs, and run items. It preserves the SQLite schema and saved application settings, which can be reset separately. The backend requires the exact typed confirmation `RESET`.
+- Brand Discovery previews are temporary signed file-backed state, not database history, so no discovery table cleanup is needed.
+
+The current local Flask application does not include CSRF middleware. This change does not introduce authentication or a larger security framework; destructive actions remain POST-only with explicit dialogs and backend confirmation validation. Do not expose the development server to untrusted networks.
 
 ## Price Intelligence
 
@@ -209,6 +240,15 @@ python scripts/smoke_test_live.py --platform hepsiburada --fetcher playwright "<
 
 For browser debugging you can add `--headed`, but headless mode remains the default and preferred smoke-test path.
 
+Run read-only brand discovery smoke tests without adding products to the Watchlist:
+
+```powershell
+.\.venv\Scripts\python.exe scripts\discover_products.py --platform trendyol --brand "Casio" --max-products 20
+.\.venv\Scripts\python.exe scripts\discover_products.py --platform hepsiburada --brand "Casio" --max-products 20
+```
+
+Both commands check robots.txt, use controlled sequential Playwright requests, print only a compact result summary and the first few products, and never print page HTML. A blocked Hepsiburada request is reported as `blocked_by_platform`.
+
 ## Batch Scraping
 
 Use the following command from the project root to run a controlled sequential batch scrape from a text file:
@@ -236,6 +276,10 @@ Watchlist management adds a new `watchlist_items` table. If your local developme
 Batch scraping adds a new `scrape_run_items` table. If your local development database was created before this table existed, start the app or run any script path that calls `initialize_database(app)` so `db.create_all()` can create the missing table.
 
 The existing `scrape_runs` model is also now used for real operational tracking. No silent database deletion is performed by this change.
+
+Brand Discovery adds no database tables or columns. Its unselected preview data expires from temporary server-side storage, while selected URLs use the existing `watchlist_items` table.
+
+Settings adds a new `app_settings` table only. Starting the app through `python run.py`, or another path that calls `initialize_database(app)`, runs `db.create_all()` and creates the table without deleting or recreating the existing SQLite database. No manual migration or data reset is required for this additive table.
 
 If your existing local `data/watch_tracker.db` was created while `listings.seller_id` was still `NOT NULL`, you must recreate that local database before live smoke tests can persist seller-less listings.
 

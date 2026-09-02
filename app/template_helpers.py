@@ -125,6 +125,17 @@ def is_active_nav(section: str) -> bool:
 		"watchlist": {"main.watchlist", "main.add_watchlist_item", "main.toggle_watchlist_item", "main.remove_watchlist_item", "main.update_watchlist"},
 		"data_quality": {"main.data_quality", "main.retry_data_quality_item"},
 		"scraping": {"main.scraping_control", "main.scraping_update_active", "main.scraping_update_selected", "main.scraping_scrape_one"},
+		"discovery": {"main.product_discovery", "main.preview_product_discovery", "main.add_product_discovery_selection"},
 		"import": {"main.import_data"},
+		"settings": {
+			"main.settings_page",
+			"main.save_application_settings",
+			"main.restore_application_settings",
+			"main.settings_clear_price_history",
+			"main.settings_clear_scrape_history",
+			"main.settings_clear_marketplace_data",
+			"main.settings_clear_watchlist",
+			"main.settings_reset_all_data",
+		},
 	}
 	return endpoint in sections.get(section, set())
