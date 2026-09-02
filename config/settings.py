@@ -3,10 +3,11 @@
 from pathlib import Path
 import tempfile
 
+from app.resource_paths import get_data_directory, get_database_path
 
-PROJECT_ROOT = Path(__file__).resolve().parent.parent
-DATA_DIR = PROJECT_ROOT / "data"
-DATABASE_PATH = DATA_DIR / "watch_tracker.db"
+
+DATA_DIR = get_data_directory()
+DATABASE_PATH = get_database_path()
 
 
 class Config:
@@ -37,3 +38,7 @@ class Config:
 	DESKTOP_READY_TIMEOUT = 15.0
 	DESKTOP_READY_INTERVAL = 0.1
 	DESKTOP_SERVER_THREADS = 4
+	DESKTOP_MODE = False
+	DESKTOP_SHUTDOWN_ENABLED = False
+	DESKTOP_SHUTDOWN_TOKEN = None
+	DESKTOP_SHUTDOWN_CALLBACK = None

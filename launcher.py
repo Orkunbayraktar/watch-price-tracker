@@ -8,11 +8,13 @@ import logging
 from logging.handlers import RotatingFileHandler
 import os
 from pathlib import Path
+import secrets
 import socket
+import sys
 from threading import Event, Lock, Thread
 import time
 from types import TracebackType
-from typing import BinaryIO, Callable, Mapping, Protocol
+from typing import BinaryIO, Callable, Protocol
 from urllib.error import HTTPError, URLError
 from urllib.request import Request, urlopen
 import webbrowser
@@ -21,17 +23,18 @@ from flask import Flask
 from waitress.server import create_server
 
 from app import create_app
+from app.resource_paths import configure_playwright_environment, get_log_directory, get_runtime_directory
 from database.db import initialize_database
 from services.scheduler_service import shutdown_scheduler, start_scheduler
 
 
-APP_NAME = "WatchPriceTracker"
 APPLICATION_ID = "watch-price-tracker"
 LOCAL_HOST = "127.0.0.1"
 DEFAULT_PORT = 5000
 DEFAULT_READY_TIMEOUT = 15.0
 DEFAULT_READY_INTERVAL = 0.1
 DEFAULT_SERVER_THREADS = 4
+SHUTDOWN_RESPONSE_GRACE_SECONDS = 0.5
 
 logger = logging.getLogger(__name__)
 
@@ -178,28 +181,27 @@ class WaitressServer:
 			self._closed = True
 		try:
 			self._server.close()
+			self._close_open_channels()
 		finally:
 			dispatcher = getattr(self._server, "task_dispatcher", None)
 			if dispatcher is not None:
 				dispatcher.shutdown(cancel_pending=True)
 
-
-def get_runtime_directory(
-	environ: Mapping[str, str] | None = None,
-	*,
-	home: Path | None = None,
-) -> Path:
-	"""Return a per-user runtime directory without relying on the source tree."""
-	environment = os.environ if environ is None else environ
-	local_app_data = environment.get("LOCALAPPDATA")
-	if local_app_data:
-		return Path(local_app_data) / APP_NAME
-	if os.name == "nt":
-		return (home or Path.home()) / "AppData" / "Local" / APP_NAME
-	xdg_state_home = environment.get("XDG_STATE_HOME")
-	if xdg_state_home:
-		return Path(xdg_state_home) / APP_NAME
-	return (home or Path.home()) / ".local" / "state" / APP_NAME
+	def _close_open_channels(self) -> None:
+		"""Close keep-alive channels so the async loop can finish promptly."""
+		socket_map = getattr(self._server, "_map", None)
+		if not isinstance(socket_map, dict):
+			return
+		for channel in list(socket_map.values()):
+			if channel is self._server:
+				continue
+			close_channel = getattr(channel, "close", None)
+			if not callable(close_channel):
+				continue
+			try:
+				close_channel()
+			except Exception:
+				logger.exception("Waitress connection cleanup failed")
 
 
 def configure_logging(runtime_directory: Path) -> Path:
@@ -219,7 +221,7 @@ def configure_logging(runtime_directory: Path) -> Path:
 		file_handler.setFormatter(formatter)
 		file_handler._watch_price_tracker = True
 		root_logger.addHandler(file_handler)
-		if not any(isinstance(handler, logging.StreamHandler) for handler in root_logger.handlers):
+		if sys.stderr is not None and not any(isinstance(handler, logging.StreamHandler) for handler in root_logger.handlers):
 			stream_handler = logging.StreamHandler()
 			stream_handler.setFormatter(formatter)
 			stream_handler._watch_price_tracker = True
@@ -335,9 +337,11 @@ def run_launcher(
 	readiness_waiter: Callable[[str, float, float, Event | None], bool] | None = None,
 	instance_manager: InstanceManager | None = None,
 	port_reserver: Callable[[int], PortReservation] | None = None,
+	log_directory: Path | None = None,
 	configure_logs: bool = True,
 ) -> int:
 	"""Run one desktop-local application instance and return a process exit code."""
+	configure_playwright_environment()
 	app_factory = app_factory or create_app
 	database_initializer = database_initializer or initialize_database
 	scheduler_starter = scheduler_starter or start_scheduler
@@ -347,17 +351,20 @@ def run_launcher(
 	readiness_waiter = readiness_waiter or wait_for_server
 	port_reserver = port_reserver or reserve_local_port
 	manager = instance_manager or InstanceManager(get_runtime_directory())
-	log_path = manager.runtime_directory / "launcher.log"
+	launcher_log_directory = log_directory or get_log_directory()
+	log_path = launcher_log_directory / "launcher.log"
 	server: Server | None = None
 	scheduler_attempted = False
 	stop_event = Event()
+	shutdown_request_event = Event()
 	ready_event = Event()
 	readiness_failed = Event()
 	browser_thread: Thread | None = None
+	shutdown_monitor_thread: Thread | None = None
 
 	try:
 		if configure_logs:
-			log_path = configure_logging(manager.runtime_directory)
+			log_path = configure_logging(launcher_log_directory)
 		logger.info("Desktop launcher started")
 		if not manager.acquire():
 			logger.info("Existing application instance detected")
@@ -384,6 +391,17 @@ def run_launcher(
 		manager.clear_state()
 		app = app_factory()
 		app.debug = False
+
+		def request_application_shutdown() -> None:
+			logger.info("In-app shutdown requested")
+			shutdown_request_event.set()
+
+		app.config.update(
+			DESKTOP_MODE=True,
+			DESKTOP_SHUTDOWN_ENABLED=True,
+			DESKTOP_SHUTDOWN_TOKEN=secrets.token_urlsafe(32),
+			DESKTOP_SHUTDOWN_CALLBACK=request_application_shutdown,
+		)
 		database_initializer(app)
 		logger.info("Database initialized")
 		scheduler_attempted = True
@@ -407,6 +425,13 @@ def run_launcher(
 		state = InstanceState(pid=os.getpid(), host=LOCAL_HOST, port=reservation.port)
 		manager.write_state(state)
 		logger.info("Selected localhost port %s", state.port)
+
+		def stop_server_when_requested() -> None:
+			shutdown_request_event.wait()
+			if stop_event.wait(SHUTDOWN_RESPONSE_GRACE_SECONDS):
+				return
+			logger.info("Graceful in-app shutdown starting")
+			server.close()
 
 		def open_browser_when_ready() -> None:
 			try:
@@ -433,6 +458,12 @@ def run_launcher(
 			except Exception:
 				logger.exception("Default browser could not be opened")
 
+		shutdown_monitor_thread = Thread(
+			target=stop_server_when_requested,
+			name="launcher-shutdown",
+			daemon=True,
+		)
+		shutdown_monitor_thread.start()
 		browser_thread = Thread(target=open_browser_when_ready, name="launcher-readiness", daemon=True)
 		browser_thread.start()
 		logger.info("Local server starting on %s:%s", state.host, state.port)
@@ -453,6 +484,7 @@ def run_launcher(
 	finally:
 		logger.info("Shutdown initiated")
 		stop_event.set()
+		shutdown_request_event.set()
 		if server is not None:
 			try:
 				server.close()
@@ -460,6 +492,8 @@ def run_launcher(
 				logger.exception("Local server cleanup failed")
 		if browser_thread is not None:
 			browser_thread.join(timeout=1.0)
+		if shutdown_monitor_thread is not None:
+			shutdown_monitor_thread.join(timeout=1.0)
 		if scheduler_attempted:
 			try:
 				scheduler_stopper(wait=False)

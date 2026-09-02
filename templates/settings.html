@@ -35,6 +35,19 @@
 	</form>
 </section>
 
+{% if desktop_shutdown_enabled %}
+<section class="card data-section settings-section" aria-labelledby="application-lifecycle-title">
+	<div class="section-heading">
+		<div><p class="eyebrow">Application Lifecycle</p><h2 id="application-lifecycle-title">Stop Local Application</h2><p class="section-copy">Stops the local Watch Price Tracker application and automatic scheduler. This does not delete any data.</p></div>
+	</div>
+	<div class="management-action">
+		<div class="management-action__intro"><h3>Exit Application</h3><p>Use this when you are finished with the desktop application. Closing only the browser keeps Watch Price Tracker and scheduled jobs running.</p></div>
+		<div class="scope-summary"><p><strong>Stops:</strong> Local server and automatic scheduler</p><p><strong>Keeps:</strong> Database, Watchlist, settings, schedules, price history, and application files</p></div>
+		<button class="button button--danger-ghost" type="button" data-dialog-open="exit-application-dialog">Review Exit Application</button>
+	</div>
+</section>
+{% endif %}
+
 <section class="card data-section settings-section">
 	<div class="section-heading">
 		<div><p class="eyebrow">Data Management</p><h2>Clear Selected Local Data</h2><p class="section-copy">Each action has a fixed scope. Review what it deletes and keeps before confirming.</p></div>
@@ -84,6 +97,18 @@
 		<div class="dialog-actions"><button class="button button--ghost" type="button" data-dialog-cancel>Cancel</button><button class="button button--danger-ghost" type="submit" data-submitting-label="Clearing...">Yes, Clear Price History</button></div>
 	</form>
 </dialog>
+
+{% if desktop_shutdown_enabled %}
+<dialog id="exit-application-dialog" class="confirmation-dialog" aria-labelledby="exit-application-title">
+	<form method="post" action="{{ url_for('main.exit_application') }}" data-submit-once data-typed-confirmation="EXIT APPLICATION">
+		<input type="hidden" name="shutdown_token" value="{{ desktop_shutdown_token }}">
+		<p class="dialog-kicker">Application lifecycle</p><h2 id="exit-application-title">Exit Watch Price Tracker?</h2>
+		<p>The local server and automatic scheduler will stop. No database records or settings will be deleted.</p>
+		<div class="form-field"><label for="exit-application-confirmation">Type exactly <code>EXIT APPLICATION</code> to continue</label><input id="exit-application-confirmation" name="confirmation" type="text" autocomplete="off" spellcheck="false" data-confirmation-input></div>
+		<div class="dialog-actions"><button class="button button--ghost" type="button" data-dialog-cancel>Cancel</button><button class="button button--danger-ghost" type="submit" data-confirmation-submit data-submitting-label="Exiting..." disabled>Exit Application</button></div>
+	</form>
+</dialog>
+{% endif %}
 
 <dialog id="clear-scrape-dialog" class="confirmation-dialog" aria-labelledby="clear-scrape-title">
 	<form method="post" action="{{ url_for('main.settings_clear_scrape_history') }}" data-submit-once>

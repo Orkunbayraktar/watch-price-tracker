@@ -82,6 +82,95 @@ def test_settings_page_loads_and_displays_effective_values(client) -> None:
 	assert "Danger Zone" in body
 	assert 'name="data_quality_stale_hours"' in body and 'value="48"' in body
 	assert 'name="discovery_max_pages"' in body and 'value="3"' in body
+	assert "Exit Application" not in body
+
+
+def test_exit_application_control_renders_only_when_launcher_enables_it(client) -> None:
+	client.application.config.update(
+		DESKTOP_SHUTDOWN_ENABLED=True,
+		DESKTOP_SHUTDOWN_TOKEN="test-token",
+		DESKTOP_SHUTDOWN_CALLBACK=lambda: None,
+	)
+	body = client.get("/settings").get_data(as_text=True)
+	assert "Application Lifecycle" in body
+	assert "Exit Application" in body
+	assert 'name="shutdown_token" value="test-token"' in body
+
+
+def test_exit_application_get_is_not_supported(client) -> None:
+	assert client.get("/settings/application/exit").status_code == 405
+
+
+def test_exit_application_post_is_disabled_in_development(client) -> None:
+	response = client.post(
+		"/settings/application/exit",
+		data={"confirmation": "EXIT APPLICATION", "shutdown_token": "anything"},
+	)
+	assert response.status_code == 404
+
+
+def test_exit_application_requires_exact_confirmation(client) -> None:
+	calls: list[str] = []
+	client.application.config.update(
+		DESKTOP_SHUTDOWN_ENABLED=True,
+		DESKTOP_SHUTDOWN_TOKEN="test-token",
+		DESKTOP_SHUTDOWN_CALLBACK=lambda: calls.append("shutdown"),
+	)
+	response = client.post(
+		"/settings/application/exit",
+		data={"confirmation": "EXIT", "shutdown_token": "test-token"},
+		follow_redirects=True,
+	)
+	assert "Type EXIT APPLICATION exactly" in response.get_data(as_text=True)
+	assert calls == []
+
+
+def test_exit_application_requires_valid_process_token(client) -> None:
+	calls: list[str] = []
+	client.application.config.update(
+		DESKTOP_SHUTDOWN_ENABLED=True,
+		DESKTOP_SHUTDOWN_TOKEN="test-token",
+		DESKTOP_SHUTDOWN_CALLBACK=lambda: calls.append("shutdown"),
+	)
+	response = client.post(
+		"/settings/application/exit",
+		data={"confirmation": "EXIT APPLICATION", "shutdown_token": "wrong"},
+		follow_redirects=True,
+	)
+	assert "exit request expired or was invalid" in response.get_data(as_text=True)
+	assert calls == []
+
+
+def test_exit_application_rejects_nonlocal_request(client) -> None:
+	client.application.config.update(
+		DESKTOP_SHUTDOWN_ENABLED=True,
+		DESKTOP_SHUTDOWN_TOKEN="test-token",
+		DESKTOP_SHUTDOWN_CALLBACK=lambda: pytest.fail("remote request invoked shutdown"),
+	)
+	response = client.post(
+		"/settings/application/exit",
+		data={"confirmation": "EXIT APPLICATION", "shutdown_token": "test-token"},
+		environ_base={"REMOTE_ADDR": "192.0.2.10"},
+	)
+	assert response.status_code == 403
+
+
+def test_confirmed_exit_invokes_callback_without_deleting_data(client) -> None:
+	seed_data()
+	calls: list[str] = []
+	client.application.config.update(
+		DESKTOP_SHUTDOWN_ENABLED=True,
+		DESKTOP_SHUTDOWN_TOKEN="test-token",
+		DESKTOP_SHUTDOWN_CALLBACK=lambda: calls.append("shutdown"),
+	)
+	response = client.post(
+		"/settings/application/exit",
+		data={"confirmation": "EXIT APPLICATION", "shutdown_token": "test-token"},
+	)
+	assert response.status_code == 200
+	assert "Watch Price Tracker is closing" in response.get_data(as_text=True)
+	assert calls == ["shutdown"]
+	assert Product.query.count() == WatchlistItem.query.count() == PriceHistory.query.count() == 1
 
 
 def test_valid_settings_can_be_updated_from_page(client) -> None:

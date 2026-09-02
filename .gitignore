@@ -11,6 +11,7 @@ __pycache__/
 build/
 dist/
 *.spec
+!WatchPriceTracker.spec
 
 # IDE / editor temporary files
 .vscode/

@@ -101,9 +101,43 @@ Test the desktop-style lifecycle with:
 .\.venv\Scripts\python.exe launcher.py
 ```
 
-The launcher tries port `5000` first and atomically reserves a dynamic localhost port when it is unavailable. Runtime state and rotating logs are stored under `%LOCALAPPDATA%\WatchPriceTracker\`, not in the repository. An OS-backed lock prevents a second server or scheduler: launching again validates the first instance through `/health`, reopens its exact dashboard URL, and exits. A crash releases the OS lock automatically, so stale JSON state is cleared by the next lock owner.
+The launcher tries port `5000` first and atomically reserves a dynamic localhost port when it is unavailable. Runtime state is stored under `%LOCALAPPDATA%\WatchPriceTracker\runtime\` and rotating logs under `%LOCALAPPDATA%\WatchPriceTracker\logs\`, not in the repository. An OS-backed lock prevents a second server or scheduler: launching again validates the first instance through `/health`, reopens its exact dashboard URL, and exits. A crash releases the OS lock automatically, so stale JSON state is cleared by the next lock owner.
 
-Closing the browser does not stop the launcher or scheduler. Re-run `launcher.py` to reopen the dashboard, or use the localhost URL recorded in `instance.json` while the launcher is running. Stop the owning launcher with `Ctrl+C`; it closes Waitress, stops APScheduler, removes connection state, and releases the lock. The inert `instance.lock` coordination file may remain, but it does not represent a held or stale lock.
+Closing the browser does not stop the launcher or scheduler. Re-run `launcher.py` to reopen the dashboard, or use the localhost URL recorded in `runtime\instance.json` while the launcher is running. Stop the source launcher with `Ctrl+C`, or use Settings > Exit Application in desktop mode. Both paths close Waitress, stop APScheduler, remove connection state, and release the lock. The inert `instance.lock` coordination file may remain, but it does not represent a held or stale lock.
+
+## Build Windows Application
+
+The MVP uses a PyInstaller `onedir` build. This is larger than `onefile`, but it avoids extracting Chromium and all application assets into a temporary directory on every launch and is easier to inspect and support. Reliability is prioritized over archive size.
+
+Create and activate a virtual environment, then install runtime and build dependencies:
+
+```powershell
+python -m venv .venv
+.\.venv\Scripts\Activate.ps1
+python -m pip install -r requirements-dev.txt
+```
+
+Build a clean windowed application. The script installs the Playwright-version-matched Chromium into Playwright's hermetic package directory, bundles it, removes only repository `build/` and `dist/` output when `--clean` is supplied, and runs the maintained spec:
+
+```powershell
+.\.venv\Scripts\python.exe scripts\build_windows.py --clean
+```
+
+The equivalent direct PyInstaller command, after installing Chromium with `PLAYWRIGHT_BROWSERS_PATH=0`, is:
+
+```powershell
+$env:PLAYWRIGHT_BROWSERS_PATH="0"
+.\.venv\Scripts\python.exe -m playwright install chromium
+.\.venv\Scripts\python.exe -m PyInstaller --noconfirm --clean WatchPriceTracker.spec
+```
+
+The output executable is `dist\WatchPriceTracker\WatchPriceTracker.exe`. Distribute the entire `dist\WatchPriceTracker\` directory; copying only the EXE omits required Python libraries, templates, static assets, and Chromium resources. The target computer does not need Python, pip, Playwright CLI, VS Code, npm, or PowerShell.
+
+Frozen builds store their new persistent database at `%LOCALAPPDATA%\WatchPriceTracker\data\watch_tracker.db`. Source development continues using `data\watch_tracker.db`. The build does not bundle or migrate the development database, so a packaged application starts with a clean user database and preserves it across restarts and application updates.
+
+The packaged app binds only to `127.0.0.1`, has no Flask debugger or console window, and logs startup failures to `%LOCALAPPDATA%\WatchPriceTracker\logs\launcher.log`. Closing the browser leaves the scheduler running. Use Settings > Exit Application, type `EXIT APPLICATION`, and confirm to stop the local server and scheduler without deleting data.
+
+The build bundles only Playwright Chromium, including its matching headless shell and media support files. Marketplace scraping remains the only feature that requires internet access. Because the executable is unsigned, Windows SmartScreen or antivirus software may warn on first launch; do not bypass organizational security policy. Code signing and an installer remain future distribution work.
 
 ## Development Status
 

@@ -150,17 +150,55 @@ def run_first_instance(
 
 
 def test_runtime_directory_uses_local_app_data(tmp_path: Path) -> None:
-	assert launcher.get_runtime_directory({"LOCALAPPDATA": str(tmp_path)}) == tmp_path / "WatchPriceTracker"
+	assert launcher.get_runtime_directory({"LOCALAPPDATA": str(tmp_path)}) == tmp_path / "WatchPriceTracker" / "runtime"
 
 
 def test_runtime_directory_uses_windows_home_fallback(tmp_path: Path) -> None:
-	assert launcher.get_runtime_directory({}, home=tmp_path) == tmp_path / "AppData" / "Local" / "WatchPriceTracker"
+	assert launcher.get_runtime_directory({}, home=tmp_path) == tmp_path / "AppData" / "Local" / "WatchPriceTracker" / "runtime"
+
+
+def test_log_directory_uses_separate_user_data_folder(tmp_path: Path) -> None:
+	assert resource_paths.get_log_directory({"LOCALAPPDATA": str(tmp_path)}) == tmp_path / "WatchPriceTracker" / "logs"
+
+
+def test_source_database_path_remains_in_repository_data() -> None:
+	assert resource_paths.get_database_path(frozen=False) == resource_paths.get_source_root() / "data" / "watch_tracker.db"
+
+
+def test_frozen_database_path_uses_writable_user_data(tmp_path: Path) -> None:
+	path = resource_paths.get_database_path(frozen=True, environ={"LOCALAPPDATA": str(tmp_path)})
+	assert path == tmp_path / "WatchPriceTracker" / "data" / "watch_tracker.db"
 
 
 def test_frozen_resource_root_uses_centralized_bundle_path(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
 	monkeypatch.setattr(resource_paths.sys, "frozen", True, raising=False)
 	monkeypatch.setattr(resource_paths.sys, "_MEIPASS", str(tmp_path), raising=False)
 	assert resource_paths.get_resource_root() == tmp_path
+
+
+def test_frozen_app_resolves_bundled_templates_and_static(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
+	(tmp_path / "templates").mkdir()
+	(tmp_path / "static").mkdir()
+	monkeypatch.setattr(resource_paths.sys, "frozen", True, raising=False)
+	monkeypatch.setattr(resource_paths.sys, "_MEIPASS", str(tmp_path), raising=False)
+	app = create_app({"TESTING": True, "SQLALCHEMY_DATABASE_URI": "sqlite:///:memory:"})
+	assert Path(app.template_folder) == tmp_path / "templates"
+	assert Path(app.static_folder) == tmp_path / "static"
+
+
+def test_frozen_playwright_path_points_to_bundled_browser(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
+	monkeypatch.setattr(resource_paths.sys, "frozen", True, raising=False)
+	monkeypatch.setattr(resource_paths.sys, "_MEIPASS", str(tmp_path), raising=False)
+	environ: dict[str, str] = {}
+	path = resource_paths.configure_playwright_environment(environ)
+	assert path == tmp_path / "playwright" / "driver" / "package" / ".local-browsers"
+	assert environ["PLAYWRIGHT_BROWSERS_PATH"] == str(path)
+
+
+def test_source_playwright_environment_is_unchanged() -> None:
+	environ = {"PLAYWRIGHT_BROWSERS_PATH": "developer-cache"}
+	assert resource_paths.configure_playwright_environment(environ, frozen=False) is None
+	assert environ["PLAYWRIGHT_BROWSERS_PATH"] == "developer-cache"
 
 
 @pytest.mark.parametrize(
@@ -259,6 +297,42 @@ def test_create_waitress_server_uses_reserved_socket_and_threads(monkeypatch: py
 	server.close()
 	assert captured["closed"] is True
 	assert captured["shutdown"] == {"cancel_pending": True}
+
+
+def test_waitress_server_closes_keep_alive_channels_once() -> None:
+	class Channel:
+		def __init__(self) -> None:
+			self.close_count = 0
+
+		def close(self) -> None:
+			self.close_count += 1
+
+	class Dispatcher:
+		def __init__(self) -> None:
+			self.shutdown_count = 0
+
+		def shutdown(self, **kwargs) -> None:
+			assert kwargs == {"cancel_pending": True}
+			self.shutdown_count += 1
+
+	class RawServer:
+		def __init__(self) -> None:
+			self.close_count = 0
+			self.channel = Channel()
+			self.task_dispatcher = Dispatcher()
+			self._map = {1: self, 2: self.channel}
+
+		def close(self) -> None:
+			self.close_count += 1
+
+	raw_server = RawServer()
+	server = launcher.WaitressServer(raw_server)
+	server.close()
+	server.close()
+
+	assert raw_server.close_count == 1
+	assert raw_server.channel.close_count == 1
+	assert raw_server.task_dispatcher.shutdown_count == 1
 
 
 def test_probe_server_accepts_only_own_health_payload(monkeypatch: pytest.MonkeyPatch) -> None:
@@ -452,6 +526,40 @@ def test_keyboard_interrupt_is_a_clean_shutdown(tmp_path: Path) -> None:
 	result, _, manager = run_first_instance(tmp_path, server=server)
 	assert result == 0
 	assert server.close_count == 1
+	assert manager.clear_count == 2
+	assert manager.release_count == 1
+
+
+def test_in_app_shutdown_callback_stops_server_scheduler_and_runtime_state(tmp_path: Path) -> None:
+	finish = Event()
+	app = make_app()
+	manager = FakeManager(tmp_path, acquired=True)
+	stop_calls: list[bool] = []
+
+	class ShutdownServer(FakeServer):
+		def run(self) -> None:
+			self.run_count += 1
+			assert app.config["DESKTOP_SHUTDOWN_ENABLED"] is True
+			assert app.config["DESKTOP_SHUTDOWN_TOKEN"]
+			app.config["DESKTOP_SHUTDOWN_CALLBACK"]()
+			assert self.finish_event.wait(1), "in-app shutdown did not stop the server"
+
+	server = ShutdownServer(finish)
+	result = launcher.run_launcher(
+		app_factory=lambda: app,
+		database_initializer=lambda flask_app: None,
+		scheduler_starter=lambda flask_app: object(),
+		scheduler_stopper=lambda *, wait: stop_calls.append(wait),
+		server_factory=lambda flask_app, reserved, **kwargs: server,
+		browser_opener=lambda url, **kwargs: None,
+		readiness_waiter=lambda url, timeout, interval, stop: True,
+		instance_manager=manager,
+		port_reserver=lambda preferred: launcher.PortReservation(FakeSocket(), 61234),
+		configure_logs=False,
+	)
+	assert result == 0
+	assert server.close_count == 1
+	assert stop_calls == [False]
 	assert manager.clear_count == 2
 	assert manager.release_count == 1
 

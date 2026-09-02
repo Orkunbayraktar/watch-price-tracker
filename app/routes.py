@@ -1,6 +1,7 @@
 """Flask route definitions for the application."""
 
 import logging
+import secrets
 
 from flask import Blueprint, abort, current_app, flash, jsonify, redirect, render_template, request, url_for
 from werkzeug.exceptions import RequestEntityTooLarge
@@ -418,6 +419,31 @@ def restore_application_settings() -> str:
 	return redirect(url_for("main.settings_page"))
 
 
+@main_bp.post("/settings/application/exit")
+def exit_application() -> str:
+	"""Request launcher-owned shutdown through a local, token-protected POST."""
+	if not current_app.config.get("DESKTOP_SHUTDOWN_ENABLED", False):
+		abort(404)
+	if request.remote_addr != "127.0.0.1":
+		abort(403)
+
+	expected_token = current_app.config.get("DESKTOP_SHUTDOWN_TOKEN")
+	submitted_token = request.form.get("shutdown_token", "")
+	if not isinstance(expected_token, str) or not expected_token or not secrets.compare_digest(submitted_token, expected_token):
+		flash("The exit request expired or was invalid. The application is still running.", "error")
+		return redirect(url_for("main.settings_page"))
+	if request.form.get("confirmation", "") != "EXIT APPLICATION":
+		flash("Type EXIT APPLICATION exactly. The application is still running.", "error")
+		return redirect(url_for("main.settings_page"))
+
+	shutdown_callback = current_app.config.get("DESKTOP_SHUTDOWN_CALLBACK")
+	if not callable(shutdown_callback):
+		logger.error("Desktop shutdown is enabled without a callable launcher callback")
+		abort(503)
+	shutdown_callback()
+	return render_template("application_shutdown.html")
+
+
 @main_bp.route("/settings/data/price-history", methods=["POST"])
 def settings_clear_price_history() -> str:
 	return _run_data_management_action(clear_price_history, "CLEAR_PRICE_HISTORY")
@@ -692,6 +718,8 @@ def _render_settings_page(
 		application_settings=settings,
 		setting_definitions=SETTING_DEFINITIONS,
 		inventory=get_data_inventory(),
+		desktop_shutdown_enabled=current_app.config.get("DESKTOP_SHUTDOWN_ENABLED", False),
+		desktop_shutdown_token=current_app.config.get("DESKTOP_SHUTDOWN_TOKEN"),
 		field_errors=field_errors or {},
 		form_values=form_values or {key: str(value) for key, value in settings.to_dict().items()},
 	)
