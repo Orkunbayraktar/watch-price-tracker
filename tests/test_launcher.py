@@ -165,6 +165,29 @@ def test_source_database_path_remains_in_repository_data() -> None:
 	assert resource_paths.get_database_path(frozen=False) == resource_paths.get_source_root() / "data" / "watch_tracker.db"
 
 
+def test_source_template_and_static_paths_exist() -> None:
+	assert resource_paths.get_template_directory().is_dir()
+	assert resource_paths.get_static_directory().is_dir()
+	app = create_app({"TESTING": True, "SQLALCHEMY_DATABASE_URI": "sqlite:///:memory:"})
+	assert Path(app.template_folder) == resource_paths.get_source_root() / "templates"
+	assert Path(app.static_folder) == resource_paths.get_source_root() / "static"
+
+
+@pytest.mark.parametrize(
+	("asset_path", "content_type"),
+	[
+		("css/style.css", "text/css"),
+		("js/main.js", "text/javascript"),
+	],
+)
+def test_source_app_serves_known_static_assets(asset_path: str, content_type: str) -> None:
+	app = create_app({"TESTING": True, "SQLALCHEMY_DATABASE_URI": "sqlite:///:memory:"})
+	response = app.test_client().get(f"/static/{asset_path}")
+	assert response.status_code == 200
+	assert response.content_type.startswith(content_type)
+	assert response.data
+
+
 def test_frozen_database_path_uses_writable_user_data(tmp_path: Path) -> None:
 	path = resource_paths.get_database_path(frozen=True, environ={"LOCALAPPDATA": str(tmp_path)})
 	assert path == tmp_path / "WatchPriceTracker" / "data" / "watch_tracker.db"
@@ -178,12 +201,41 @@ def test_frozen_resource_root_uses_centralized_bundle_path(tmp_path: Path, monke
 
 def test_frozen_app_resolves_bundled_templates_and_static(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
 	(tmp_path / "templates").mkdir()
-	(tmp_path / "static").mkdir()
+	(tmp_path / "static" / "css").mkdir(parents=True)
+	(tmp_path / "static" / "js").mkdir()
+	(tmp_path / "static" / "css" / "style.css").write_text("body { color: black; }", encoding="utf-8")
+	(tmp_path / "static" / "js" / "main.js").write_text("window.frozenAssetLoaded = true;", encoding="utf-8")
 	monkeypatch.setattr(resource_paths.sys, "frozen", True, raising=False)
 	monkeypatch.setattr(resource_paths.sys, "_MEIPASS", str(tmp_path), raising=False)
 	app = create_app({"TESTING": True, "SQLALCHEMY_DATABASE_URI": "sqlite:///:memory:"})
 	assert Path(app.template_folder) == tmp_path / "templates"
 	assert Path(app.static_folder) == tmp_path / "static"
+	assert app.test_client().get("/static/css/style.css").status_code == 200
+	assert app.test_client().get("/static/js/main.js").status_code == 200
+
+
+def test_frozen_resource_root_falls_back_to_executable_internal_directory(
+	tmp_path: Path,
+	monkeypatch: pytest.MonkeyPatch,
+) -> None:
+	bundle_root = tmp_path / "reported-bundle"
+	bundle_root.mkdir()
+	executable_directory = tmp_path / "portable-app"
+	internal_directory = executable_directory / "_internal"
+	(internal_directory / "templates").mkdir(parents=True)
+	(internal_directory / "static").mkdir()
+	monkeypatch.setattr(resource_paths.sys, "frozen", True, raising=False)
+	monkeypatch.setattr(resource_paths.sys, "_MEIPASS", str(bundle_root), raising=False)
+	monkeypatch.setattr(resource_paths.sys, "executable", str(executable_directory / "WatchPriceTracker.exe"))
+
+	assert resource_paths.get_resource_root() == internal_directory
+	assert resource_paths.resource_path("static") == internal_directory / "static"
+
+
+@pytest.mark.parametrize("value", ["../static", Path("C:/absolute/static")])
+def test_resource_path_rejects_unsafe_values(value: str | Path) -> None:
+	with pytest.raises(ValueError):
+		resource_paths.resource_path(value)
 
 
 def test_frozen_playwright_path_points_to_bundled_browser(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:

@@ -10,6 +10,8 @@ __pycache__/
 *.sqlite3
 build/
 dist/
+release-test*/
+WatchPriceTracker-*.zip
 *.spec
 !WatchPriceTracker.spec
 

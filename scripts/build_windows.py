@@ -17,6 +17,12 @@ SPEC_PATH = PROJECT_ROOT / "WatchPriceTracker.spec"
 PLAYWRIGHT_PACKAGE = Path(playwright.__file__).resolve().parent
 HERMETIC_BROWSER_DIR = PLAYWRIGHT_PACKAGE / "driver" / "package" / ".local-browsers"
 EXPECTED_EXE = PROJECT_ROOT / "dist" / "WatchPriceTracker" / "WatchPriceTracker.exe"
+REQUIRED_BUNDLED_RESOURCES = (
+	Path("_internal/templates/base.html"),
+	Path("_internal/static/css/style.css"),
+	Path("_internal/static/js/main.js"),
+	Path("_internal/static/examples/watch_import_template.csv"),
+)
 
 
 def main() -> int:
@@ -52,6 +58,7 @@ def main() -> int:
 	)
 	if not EXPECTED_EXE.is_file():
 		raise RuntimeError(f"PyInstaller completed without creating {EXPECTED_EXE}")
+	_validate_bundled_resources(EXPECTED_EXE.parent)
 	print(f"Built: {EXPECTED_EXE}")
 	print(f"Distribution size: {_directory_size_mb(EXPECTED_EXE.parent):.1f} MiB")
 	return 0
@@ -62,6 +69,14 @@ def _has_bundled_chromium() -> bool:
 		path.is_dir() and path.name.startswith(("chromium-", "chromium_headless_shell-"))
 		for path in HERMETIC_BROWSER_DIR.iterdir()
 	)
+
+
+def _validate_bundled_resources(distribution_directory: Path) -> None:
+	missing = [path for path in REQUIRED_BUNDLED_RESOURCES if not (distribution_directory / path).is_file()]
+	if missing:
+		formatted = ", ".join(str(path) for path in missing)
+		raise RuntimeError(f"Build is missing required bundled resources: {formatted}")
+	print(f"Verified {len(REQUIRED_BUNDLED_RESOURCES)} required template/static resources.")
 
 
 def _remove_build_output(path: Path) -> None:

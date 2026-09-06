@@ -1,20 +1,38 @@
 """Flask uygulama paketinin başlangıç modülü."""
 
+import logging
+
 from flask import Flask
 
-from app.resource_paths import get_resource_root
+from app.resource_paths import count_resource_files, get_static_directory, get_template_directory
 from app.template_helpers import register_template_helpers
 from config.settings import Config
 from database.db import init_db
 
 
+logger = logging.getLogger(__name__)
+
+
 def create_app(config_overrides: dict | None = None) -> Flask:
 	"""Application factory for the Watch Price Tracker app."""
-	project_root = get_resource_root()
+	templates_path = get_template_directory()
+	static_path = get_static_directory()
+	logger.info(
+		"Flask template path resolved to %s (exists=%s, files=%s)",
+		templates_path,
+		templates_path.is_dir(),
+		count_resource_files(templates_path),
+	)
+	logger.info(
+		"Flask static path resolved to %s (exists=%s, files=%s)",
+		static_path,
+		static_path.is_dir(),
+		count_resource_files(static_path),
+	)
 	app = Flask(
 		__name__,
-		template_folder=str(project_root / "templates"),
-		static_folder=str(project_root / "static"),
+		template_folder=str(templates_path),
+		static_folder=str(static_path),
 		static_url_path="/static",
 	)
 	app.config.from_object(Config)

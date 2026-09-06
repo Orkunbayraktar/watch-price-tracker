@@ -24,10 +24,51 @@ def get_source_root() -> Path:
 
 def get_resource_root() -> Path:
 	"""Return the read-only root containing templates, static assets, and packages."""
-	bundle_root = getattr(sys, "_MEIPASS", None)
-	if is_frozen() and bundle_root:
-		return Path(bundle_root)
+	if is_frozen():
+		candidates: list[Path] = []
+		bundle_root = getattr(sys, "_MEIPASS", None)
+		if bundle_root:
+			candidates.append(Path(bundle_root))
+		executable_directory = Path(sys.executable).resolve().parent
+		candidates.extend((executable_directory / "_internal", executable_directory))
+		for candidate in candidates:
+			if _contains_application_resources(candidate):
+				return candidate
+		if candidates:
+			return candidates[0]
 	return get_source_root()
+
+
+def resource_path(relative_path: str | Path) -> Path:
+	"""Resolve one safe application resource below the active resource root."""
+	relative = Path(relative_path)
+	if relative.is_absolute() or ".." in relative.parts:
+		raise ValueError("Application resource paths must be relative and cannot traverse parents.")
+	return get_resource_root() / relative
+
+
+def get_template_directory() -> Path:
+	"""Return the directory containing Jinja templates."""
+	return resource_path("templates")
+
+
+def get_static_directory() -> Path:
+	"""Return the recursively bundled Flask static directory."""
+	return resource_path("static")
+
+
+def count_resource_files(directory: Path) -> int:
+	"""Return a diagnostic file count, or zero when a resource directory is absent."""
+	if not directory.is_dir():
+		return 0
+	try:
+		return sum(1 for path in directory.rglob("*") if path.is_file())
+	except OSError:
+		return 0
+
+
+def _contains_application_resources(candidate: Path) -> bool:
+	return (candidate / "templates").is_dir() and (candidate / "static").is_dir()
 
 
 def get_user_data_root(
