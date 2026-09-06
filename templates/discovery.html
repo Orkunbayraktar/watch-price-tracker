@@ -19,49 +19,81 @@
 	<div class="section-heading">
 		<div>
 			<p class="eyebrow">Step 1</p>
-			<h2>Find a Brand Catalog</h2>
-			<p class="section-copy">Discovery checks robots.txt before every sequential page request. Detailed product pages are not opened at this stage.</p>
+			<h2>Discover Across Catalogs</h2>
+			<p class="section-copy">Collect products from permitted catalog first pages, then review and import your selections. Catalogs may include watches and accessories. No product pages are scraped during discovery.</p>
 		</div>
 	</div>
 	<form class="discovery-search-form" method="post" action="{{ url_for('main.preview_product_discovery') }}" data-submit-once>
 		<div class="form-field">
 			<label for="discovery-platform">Marketplace</label>
-			<select id="discovery-platform" name="platform" required>
+			<select id="discovery-platform" name="platform" required data-discovery-platform>
+				<option value="saatvesaat"{% if form_values.platform == 'saatvesaat' %} selected{% endif %}>Saat&amp;Saat — multiple catalogs</option>
 				<option value="trendyol"{% if form_values.platform == 'trendyol' %} selected{% endif %}>Trendyol</option>
-				<option value="hepsiburada"{% if form_values.platform == 'hepsiburada' %} selected{% endif %}>Hepsiburada</option>
+				<option value="hepsiburada" disabled>Hepsiburada — unavailable</option>
 			</select>
 		</div>
-		<div class="form-field form-field--wide">
+		<div class="form-field form-field--wide" data-trendyol-control{% if form_values.platform == 'saatvesaat' %} hidden{% endif %}>
 			<label for="discovery-brand">Brand</label>
-			<input id="discovery-brand" name="brand" type="text" value="{{ form_values.brand }}" maxlength="120" autocomplete="off" placeholder="Casio" required aria-describedby="discovery-brand-help">
-			<p id="discovery-brand-help" class="field-help">The provider URL-encodes this value and keeps navigation on the selected marketplace host.</p>
+			<input id="discovery-brand" name="brand" type="text" value="{{ form_values.brand }}" maxlength="120" autocomplete="off" placeholder="Casio"{% if form_values.platform == 'saatvesaat' %} disabled{% else %} required{% endif %} aria-describedby="discovery-brand-help">
+			<p id="discovery-brand-help" class="field-help">Trendyol search is currently robots-restricted. Discovery stops when access is denied.</p>
 		</div>
 		<div class="form-field">
-			<label for="discovery-max-products">Maximum products</label>
-			<input id="discovery-max-products" name="max_products" type="number" min="1" max="{{ max_products_limit }}" value="{{ form_values.max_products }}" required>
+			<label for="discovery-max-products">Target products</label>
+			<select id="discovery-max-products" name="max_products" required>
+				{% for target in [25, 50, 100, 150, 200] %}<option value="{{ target }}"{% if form_values.max_products|int == target %} selected{% endif %}>{{ target }}</option>{% endfor %}
+			</select>
+		</div>
+		<div class="form-field" data-catalog-control{% if form_values.platform != 'saatvesaat' %} hidden{% endif %}>
+			<label for="discovery-max-catalogs">Maximum catalogs</label>
+			<input id="discovery-max-catalogs" name="max_catalogs" type="number" min="1" max="25" value="{{ form_values.max_catalogs|default('15') }}" required{% if form_values.platform != 'saatvesaat' %} disabled{% endif %}>
 		</div>
 		<div class="form-actions">
 			<button class="button button--primary" type="submit" data-submitting-label="Discovering...">Discover Products</button>
 		</div>
+		<fieldset class="discovery-catalogs" data-catalog-control{% if form_values.platform != 'saatvesaat' %} hidden disabled{% endif %}>
+			<legend>Catalogs to include</legend>
+			<p class="field-help">Scanned in the order below. Discovery stops at your target or catalog limit. Robots-denied catalogs are skipped; a platform block stops the run. Larger runs can take a few minutes.</p>
+			<label class="catalog-choice"><input type="checkbox" class="control-checkbox" data-catalog-select-all> Select All Catalogs</label>
+			<div class="catalog-grid">
+				{% for catalog in catalog_targets %}
+				<label class="catalog-choice"><input type="checkbox" class="control-checkbox" name="catalog_ids" value="{{ catalog.id }}" data-catalog-item{% if form_values.catalog_ids is not defined or catalog.id in form_values.catalog_ids %} checked{% endif %}> {{ catalog.display_name }}</label>
+				{% endfor %}
+			</div>
+		</fieldset>
 	</form>
 </section>
 
 {% if discovery_result %}
 <section class="discovery-outcome discovery-outcome--{{ 'success' if discovery_result.status == 'success' else 'error' }}" role="status" aria-live="polite">
 	<div>
-		<strong>{% if discovery_result.status == 'success' %}{{ discovery_result.message }}{% elif discovery_result.failure_reason == 'blocked_by_platform' %}Blocked by platform{% else %}Discovery could not continue{% endif %}</strong>
+		<strong>{{ discovery_result.message or 'Discovery could not continue' }}</strong>
 		<p>{{ discovery_result.platform|platform_label }} / {{ discovery_result.brand }}{% if discovery_result.failure_reason %} / {{ discovery_result.failure_reason }}{% endif %}</p>
 	</div>
 	<div class="discovery-outcome__stats">
-		<span><strong>{{ discovery_result.pages_scanned }}</strong> pages</span>
-		<span><strong>{{ discovery_result.discovered_count }}</strong> products</span>
+		<span><strong>{{ discovery_result.pages_scanned }}</strong> {{ 'Catalogs scanned' if discovery_result.platform == 'saatvesaat' else 'pages' }}</span>
+		<span><strong>{{ discovery_result.discovered_count }}</strong> Products discovered</span>
+		<span><strong>{{ discovery_result.discovered_count - tracked_urls|length }}</strong> New products</span>
+		<span><strong>{{ tracked_urls|length }}</strong> Already tracked</span>
+		{% if discovery_result.platform == 'saatvesaat' %}
+		<span><strong>{{ discovery_result.duplicates_skipped }}</strong> Duplicates skipped</span>
+		<span><strong>{{ discovery_result.catalog_failures }}</strong> Catalog failures/skips</span>
+		{% endif %}
 	</div>
 </section>
+{% if discovery_result.catalog_outcomes %}
+<details class="card discovery-catalog-report">
+	<summary>Catalog details — {{ discovery_result.catalogs_requested }} selected, {{ discovery_result.catalog_outcomes|length }} checked, limit {{ discovery_result.catalog_limit }}</summary>
+	<ul>{% for outcome in discovery_result.catalog_outcomes %}<li>{{ outcome.display_name }}: {{ outcome.products_added }} unique products added{% if outcome.reason %} — {{ outcome.reason|replace('_', ' ') }}{% endif %}{% if outcome.duplicates_skipped %}; {{ outcome.duplicates_skipped }} duplicates skipped{% endif %}</li>{% endfor %}</ul>
+</details>
+{% endif %}
 
 {% if discovery_result.status != 'success' %}
 <section class="card empty-state discovery-error-state">
 	<h2>
-		{% if discovery_result.failure_reason == 'invalid_brand' %}Invalid brand
+		{% if discovery_result.status == 'partial' %}Partial results are ready to review
+		{% elif discovery_result.failure_reason == 'invalid_limits' %}Invalid discovery limits
+		{% elif discovery_result.failure_reason == 'invalid_catalogs' %}Choose available catalogs
+		{% elif discovery_result.failure_reason == 'invalid_brand' %}Invalid brand
 		{% elif discovery_result.failure_reason == 'robots_denied' %}robots.txt denied discovery
 		{% elif discovery_result.failure_reason == 'robots_load_failed' %}robots.txt unavailable
 		{% elif discovery_result.failure_reason == 'blocked_by_platform' %}Blocked by platform
@@ -71,7 +103,8 @@
 	</h2>
 	<p>{{ discovery_result.message }}</p>
 </section>
-{% elif discovery_result.products %}
+{% endif %}
+{% if discovery_result.products %}
 <section class="card data-section discovery-preview" data-discovery-preview>
 	<div class="section-heading discovery-preview__heading">
 		<div>
@@ -97,7 +130,7 @@
 				</tr>
 			</thead>
 			<tbody>
-				{% for product in discovery_result.products %}
+					{% for product in preview_products %}
 				<tr data-discovery-row data-filter-text="{{ (product.product_name or '')|lower }} {{ (product.external_product_id or '')|lower }} {{ (product.brand or '')|lower }}">
 					<td class="selection-cell">
 						<label class="sr-only" for="discovered-product-{{ loop.index }}">Select {{ product.product_name or product.external_product_id or 'discovered product' }}</label>

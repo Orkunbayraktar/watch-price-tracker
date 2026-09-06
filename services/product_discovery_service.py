@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from dataclasses import dataclass
+from dataclasses import dataclass, replace
 from typing import Callable
 
 from database.models import WatchlistItem
@@ -10,17 +10,17 @@ from discovery import (
 	BaseDiscoveryProvider,
 	DiscoveredProduct,
 	DiscoveryResult,
-	HepsiburadaDiscoveryProvider,
 	TrendyolDiscoveryProvider,
+	SaatVeSaatDiscoveryProvider,
 )
-from services.url_service import normalize_tracking_url
+from services.product_identity_service import product_identity
 from services.watchlist_service import WatchlistValidationError, create_watchlist_item, validate_and_normalize_watchlist_url
 
 
 ProviderFactory = Callable[[], BaseDiscoveryProvider]
 DEFAULT_PROVIDER_FACTORIES: dict[str, ProviderFactory] = {
 	"trendyol": TrendyolDiscoveryProvider,
-	"hepsiburada": HepsiburadaDiscoveryProvider,
+	"saatvesaat": SaatVeSaatDiscoveryProvider,
 }
 
 
@@ -46,10 +46,23 @@ def discover_products(
 	absolute_max_products: int = 200,
 	provider: BaseDiscoveryProvider | None = None,
 	provider_factories: dict[str, ProviderFactory] | None = None,
+	catalog_ids: list[str] | None = None,
+	max_catalogs: int = 15,
 ) -> DiscoveryResult:
 	"""Validate bounded input, select a provider, and deduplicate its result."""
 	normalized_platform = (platform or "").strip().lower()
 	normalized_brand = " ".join((brand or "").split())
+	if normalized_platform == "hepsiburada":
+		return _failure(normalized_platform, normalized_brand, "blocked_by_platform", "Hepsiburada discovery is unavailable because of platform blocking.")
+	if normalized_platform == "saatvesaat":
+		factories = provider_factories if provider_factories is not None else DEFAULT_PROVIDER_FACTORIES
+		factory = factories.get(normalized_platform)
+		if provider is None and factory is None:
+			return _failure(normalized_platform, normalized_brand, "unsupported_platform", "Select a supported marketplace.")
+		catalog_provider = provider or factory()
+		if catalog_provider.platform != normalized_platform:
+			return _failure(normalized_platform, normalized_brand, "unsupported_platform", "The selected provider does not match the marketplace.")
+		return _deduplicate_result(catalog_provider.discover_catalogs(catalog_ids, target_products=max_products, max_catalogs=max_catalogs), 200)
 	if not normalized_brand or len(normalized_brand) > 120 or any(ord(character) < 32 for character in normalized_brand):
 		return _failure(normalized_platform, normalized_brand, "invalid_brand", "Enter a brand name between 1 and 120 characters.")
 
@@ -70,10 +83,10 @@ def discover_products(
 
 def get_tracked_discovery_urls(products: tuple[DiscoveredProduct, ...]) -> set[str]:
 	"""Return preview URLs already present in the Watchlist."""
-	urls = [normalize_tracking_url(product.product_url) for product in products]
-	if not urls:
+	if not products:
 		return set()
-	return {row.url for row in WatchlistItem.query.filter(WatchlistItem.url.in_(urls)).all()}
+	identities = {product_identity(row.url) for row in WatchlistItem.query.filter(WatchlistItem.platform.in_({product.platform for product in products})).all()}
+	return {product.product_url for product in products if product_identity(product.product_url) in identities}
 
 
 def add_discovered_products(result: DiscoveryResult, selected_urls: list[str]) -> DiscoveryAddResult:
@@ -81,11 +94,11 @@ def add_discovered_products(result: DiscoveryResult, selected_urls: list[str]) -
 	if not selected_urls:
 		return DiscoveryAddResult()
 
-	preview_products = {normalize_tracking_url(product.product_url): product for product in result.products}
+	preview_products = {product_identity(product.product_url): product for product in result.products}
 	added_ids: list[int] = []
 	already_tracked = 0
 	skipped = 0
-	seen: set[str] = set()
+	seen: set[tuple[str, str]] = set()
 
 	for raw_url in selected_urls:
 		try:
@@ -93,15 +106,16 @@ def add_discovered_products(result: DiscoveryResult, selected_urls: list[str]) -
 		except WatchlistValidationError:
 			skipped += 1
 			continue
-		if url in seen:
+		identity = product_identity(url)
+		if identity in seen:
 			continue
-		seen.add(url)
-		product = preview_products.get(url)
+		seen.add(identity)
+		product = preview_products.get(identity)
 		if product is None:
 			skipped += 1
 			continue
 		try:
-			item = create_watchlist_item(url, display_name=product.product_name)
+			item = create_watchlist_item(product.product_url, display_name=product.product_name)
 		except WatchlistValidationError as error:
 			if "already being tracked" in str(error):
 				already_tracked += 1
@@ -114,15 +128,16 @@ def add_discovered_products(result: DiscoveryResult, selected_urls: list[str]) -
 
 
 def _deduplicate_result(result: DiscoveryResult, limit: int) -> DiscoveryResult:
-	products_by_url: dict[str, DiscoveredProduct] = {}
+	products_by_url: dict[tuple[str, str], DiscoveredProduct] = {}
 	for product in result.products:
 		try:
 			canonical_url = validate_and_normalize_watchlist_url(product.product_url)
 		except WatchlistValidationError:
 			continue
-		if canonical_url in products_by_url:
+		identity = product_identity(canonical_url)
+		if identity in products_by_url:
 			continue
-		products_by_url[canonical_url] = DiscoveredProduct(
+		products_by_url[identity] = DiscoveredProduct(
 			platform=product.platform,
 			product_url=canonical_url,
 			external_product_id=product.external_product_id,
@@ -135,16 +150,7 @@ def _deduplicate_result(result: DiscoveryResult, limit: int) -> DiscoveryResult:
 		)
 		if len(products_by_url) >= limit:
 			break
-	return DiscoveryResult(
-		platform=result.platform,
-		brand=result.brand,
-		status=result.status,
-		source_url=result.source_url,
-		products=tuple(products_by_url.values()),
-		pages_scanned=result.pages_scanned,
-		failure_reason=result.failure_reason,
-		message=result.message,
-	)
+	return replace(result, products=tuple(products_by_url.values()))
 
 
 def _failure(platform: str, brand: str, reason: str, message: str) -> DiscoveryResult:

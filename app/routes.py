@@ -7,6 +7,7 @@ from flask import Blueprint, abort, current_app, flash, jsonify, redirect, rende
 from werkzeug.exceptions import RequestEntityTooLarge
 
 from discovery import DiscoveryResult
+from discovery.saatvesaat import CATALOG_TARGETS, DEFAULT_MAX_CATALOGS, DEFAULT_TARGET_PRODUCTS
 from services.data_management_service import (
 	DataManagementBlockedError,
 	DataManagementConfirmationError,
@@ -325,19 +326,24 @@ def product_discovery() -> str:
 @main_bp.route("/discovery/preview", methods=["POST"])
 def preview_product_discovery() -> str:
 	"""Run bounded marketplace discovery and store its preview server-side."""
-	platform = request.form.get("platform", "trendyol")
+	platform = request.form.get("platform", "saatvesaat").strip().lower()
 	brand = request.form.get("brand", "")
 	application_settings = get_application_settings()
-	max_products = request.form.get("max_products", application_settings.discovery_max_products)
+	default_products = DEFAULT_TARGET_PRODUCTS if platform == "saatvesaat" else application_settings.discovery_max_products
+	max_products = request.form.get("max_products", default_products)
+	max_catalogs = request.form.get("max_catalogs", DEFAULT_MAX_CATALOGS)
+	catalog_ids = request.form.getlist("catalog_ids")
 	try:
+		catalog_options = {"catalog_ids": catalog_ids, "max_catalogs": max_catalogs} if platform == "saatvesaat" else {}
 		result = discover_products(
 			platform,
 			brand,
 			max_products=max_products,
 			max_pages=application_settings.discovery_max_pages,
 			absolute_max_products=current_app.config["DISCOVERY_ABSOLUTE_MAX_PRODUCTS"],
+			**catalog_options,
 		)
-		preview_token = _discovery_preview_store().save(result) if result.status == "success" else None
+		preview_token = _discovery_preview_store().save(result) if result.products or result.status == "success" else None
 	except Exception:
 		logger.exception("Unexpected error while discovering marketplace products")
 		result = DiscoveryResult(
@@ -352,7 +358,7 @@ def preview_product_discovery() -> str:
 	return _render_discovery_page(
 		discovery_result=result,
 		preview_token=preview_token,
-		form_values={"platform": platform, "brand": brand, "max_products": str(max_products)},
+		form_values={"platform": platform, "brand": brand, "max_products": str(max_products), "max_catalogs": str(max_catalogs), "catalog_ids": catalog_ids},
 	)
 
 
@@ -381,7 +387,7 @@ def add_product_discovery_selection() -> str:
 		discovery_result=result,
 		preview_token=preview_token,
 		add_result=add_result,
-		form_values={"platform": result.platform, "brand": result.brand, "max_products": str(result.discovered_count or get_application_settings().discovery_max_products)},
+		form_values={"platform": result.platform, "brand": result.brand, "max_products": str(result.target_products or result.discovered_count or get_application_settings().discovery_max_products), "max_catalogs": str(result.catalog_limit or DEFAULT_MAX_CATALOGS), "catalog_ids": result.selected_catalog_ids},
 	)
 
 
@@ -697,12 +703,15 @@ def _render_discovery_page(
 		discovery_result=discovery_result,
 		preview_token=preview_token,
 		tracked_urls=tracked_urls,
+		preview_products=sorted(discovery_result.products, key=lambda product: product.product_url in tracked_urls) if discovery_result else [],
 		add_result=add_result,
 		form_values=form_values or {
-			"platform": "trendyol",
+			"platform": "saatvesaat",
 			"brand": "",
-			"max_products": str(application_settings.discovery_max_products),
+			"max_products": "100",
+			"max_catalogs": str(DEFAULT_MAX_CATALOGS),
 		},
+		catalog_targets=CATALOG_TARGETS,
 		max_products_limit=current_app.config["DISCOVERY_ABSOLUTE_MAX_PRODUCTS"],
 	)
 

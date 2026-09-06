@@ -57,6 +57,35 @@ document.addEventListener("DOMContentLoaded", () => {
 	itemCheckboxes.forEach((checkbox) => checkbox.addEventListener("change", updateSelectionState));
 	updateSelectionState();
 
+	const discoveryPlatform = document.querySelector("[data-discovery-platform]");
+	if (discoveryPlatform) {
+		const form = discoveryPlatform.form;
+		const catalogItems = Array.from(form.querySelectorAll("[data-catalog-item]"));
+		const selectCatalogs = form.querySelector("[data-catalog-select-all]");
+		const syncCatalogs = () => {
+			const selected = catalogItems.filter((item) => item.checked).length;
+			selectCatalogs.checked = selected === catalogItems.length;
+			selectCatalogs.indeterminate = selected > 0 && selected < catalogItems.length;
+		};
+		selectCatalogs.addEventListener("change", () => {
+			catalogItems.forEach((item) => { item.checked = selectCatalogs.checked; });
+			syncCatalogs();
+		});
+		catalogItems.forEach((item) => item.addEventListener("change", syncCatalogs));
+		const syncPlatform = () => {
+			const catalogs = discoveryPlatform.value === "saatvesaat";
+			form.querySelectorAll("[data-catalog-control], [data-trendyol-control]").forEach((group) => {
+				const enabled = group.hasAttribute("data-catalog-control") ? catalogs : !catalogs;
+				group.hidden = !enabled;
+				if (group.tagName === "FIELDSET") group.disabled = !enabled;
+				group.querySelectorAll("input").forEach((input) => { input.disabled = !enabled; });
+			});
+			form.querySelector("[name='brand']").required = !catalogs;
+		};
+		syncCatalogs();
+		syncPlatform();
+		discoveryPlatform.addEventListener("change", syncPlatform);
+	}
 	const discoveryPreview = document.querySelector("[data-discovery-preview]");
 	if (discoveryPreview) {
 		const filter = discoveryPreview.querySelector("[data-discovery-filter]");

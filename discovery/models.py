@@ -43,6 +43,19 @@ class DiscoveredProduct:
 
 
 @dataclass(frozen=True, slots=True)
+class CatalogOutcome:
+	"""One bounded catalog attempt, including safe skips and failures."""
+
+	catalog_id: str
+	display_name: str
+	status: str
+	reason: str | None = None
+	products_found: int = 0
+	products_added: int = 0
+	duplicates_skipped: int = 0
+
+
+@dataclass(frozen=True, slots=True)
 class DiscoveryResult:
 	"""Structured success or failure returned by every discovery provider."""
 
@@ -54,6 +67,24 @@ class DiscoveryResult:
 	pages_scanned: int = 0
 	failure_reason: str | None = None
 	message: str | None = None
+	catalogs_requested: int = 0
+	catalog_limit: int = 0
+	target_products: int = 0
+	stop_reason: str | None = None
+	catalog_outcomes: tuple[CatalogOutcome, ...] = ()
+	selected_catalog_ids: tuple[str, ...] = ()
+
+	@property
+	def catalogs_scanned(self) -> int:
+		return sum(item.status == "success" for item in self.catalog_outcomes)
+
+	@property
+	def duplicates_skipped(self) -> int:
+		return sum(item.duplicates_skipped for item in self.catalog_outcomes)
+
+	@property
+	def catalog_failures(self) -> int:
+		return sum(item.status != "success" for item in self.catalog_outcomes)
 
 	@property
 	def discovered_count(self) -> int:
@@ -69,6 +100,12 @@ class DiscoveryResult:
 			"pages_scanned": self.pages_scanned,
 			"failure_reason": self.failure_reason,
 			"message": self.message,
+			"catalogs_requested": self.catalogs_requested,
+			"catalog_limit": self.catalog_limit,
+			"target_products": self.target_products,
+			"stop_reason": self.stop_reason,
+			"catalog_outcomes": [asdict(item) for item in self.catalog_outcomes],
+			"selected_catalog_ids": list(self.selected_catalog_ids),
 		}
 
 	@classmethod
@@ -82,4 +119,10 @@ class DiscoveryResult:
 			pages_scanned=int(payload.get("pages_scanned", 0)),
 			failure_reason=payload.get("failure_reason"),
 			message=payload.get("message"),
+			catalogs_requested=int(payload.get("catalogs_requested", 0)),
+			catalog_limit=int(payload.get("catalog_limit", 0)),
+			target_products=int(payload.get("target_products", 0)),
+			stop_reason=payload.get("stop_reason"),
+			catalog_outcomes=tuple(CatalogOutcome(**item) for item in payload.get("catalog_outcomes", [])),
+			selected_catalog_ids=tuple(payload.get("selected_catalog_ids", [])),
 		)

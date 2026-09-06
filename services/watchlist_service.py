@@ -15,6 +15,7 @@ from services.batch_scraping_service import BatchScrapeResult, run_batch
 from services.data_quality_service import HealthState, get_watchlist_health_map
 from services.scraping_service import extract_external_product_id_for_url, get_platform_for_url
 from services.url_service import normalize_tracking_url
+from services.product_identity_service import canonical_product_url, product_identity
 
 
 DEFAULT_WATCHLIST_FETCH_STRATEGY = "playwright"
@@ -97,7 +98,9 @@ def get_watchlist_item(item_id: int) -> WatchlistItem | None:
 def create_watchlist_item(url: str, display_name: str | None = None) -> WatchlistItem:
 	"""Validate and persist a new tracked product URL."""
 	canonical_url = validate_and_normalize_watchlist_url(url)
-	if WatchlistItem.query.filter_by(url=canonical_url).first() is not None:
+	identity = product_identity(canonical_url)
+	platform = get_platform_for_url(canonical_url)
+	if any(product_identity(row.url) == identity for row in WatchlistItem.query.filter_by(platform=platform).all()):
 		raise WatchlistValidationError("This product URL is already being tracked.")
 
 	platform = get_platform_for_url(canonical_url)
@@ -238,7 +241,10 @@ def update_watchlist_item(
 
 def validate_and_normalize_watchlist_url(url: str) -> str:
 	"""Validate and normalize one supported marketplace product URL."""
-	normalized_url = normalize_tracking_url(url)
+	try:
+		normalized_url = canonical_product_url(normalize_tracking_url(url))
+	except ValueError as error:
+		raise WatchlistValidationError("Enter a valid marketplace product URL without credentials or custom ports.") from error
 	if not normalized_url:
 		raise WatchlistValidationError("Enter a Trendyol, Hepsiburada, or Saat&Saat product URL.")
 
