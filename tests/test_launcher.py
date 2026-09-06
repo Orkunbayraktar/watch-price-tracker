@@ -174,17 +174,17 @@ def test_source_template_and_static_paths_exist() -> None:
 
 
 @pytest.mark.parametrize(
-	("asset_path", "content_type"),
+	("asset_path", "content_types"),
 	[
-		("css/style.css", "text/css"),
-		("js/main.js", "text/javascript"),
+		("css/style.css", ("text/css",)),
+		("js/main.js", ("text/javascript", "application/javascript")),
 	],
 )
-def test_source_app_serves_known_static_assets(asset_path: str, content_type: str) -> None:
+def test_source_app_serves_known_static_assets(asset_path: str, content_types: tuple[str, ...]) -> None:
 	app = create_app({"TESTING": True, "SQLALCHEMY_DATABASE_URI": "sqlite:///:memory:"})
 	response = app.test_client().get(f"/static/{asset_path}")
 	assert response.status_code == 200
-	assert response.content_type.startswith(content_type)
+	assert response.mimetype in content_types
 	assert response.data
 
 
